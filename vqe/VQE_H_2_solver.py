@@ -47,7 +47,7 @@ class VQEH2Solver:
         """
         # Create local Qiskit objects:
         # Build the Hamiltonian and get its Qiskit version
-        h2_hamiltonian = HamiltonianBuilder(get_h2_hamiltonian_terms)
+        h2_hamiltonian = HamiltonianBuilder(get_h2_hamiltonian_terms())
         qiskit_h2_hamiltonian = h2_hamiltonian.get_qiskit_hamiltonian()
         
         # Create a parameterized ansatz
@@ -101,7 +101,7 @@ class VQEH2Solver:
         """
         print("Solving with QLM...")
         # Create local objects:
-        h2_hamiltonian = HamiltonianBuilder(get_h2_hamiltonian_terms)
+        h2_hamiltonian = HamiltonianBuilder(get_h2_hamiltonian_terms())
         ansatz = TwoLocal(self.num_qubits, "ry", "cz")
         decomposed_ansatz = ansatz.decompose()
         qlm_circuit = qiskit_to_qlm(decomposed_ansatz)
@@ -177,7 +177,7 @@ class VQEH2Solver:
         """
         print("Solving with Cirq...")
         # Create local objects:
-        h2_hamiltonian = HamiltonianBuilder(get_h2_hamiltonian_terms)
+        h2_hamiltonian = HamiltonianBuilder(get_h2_hamiltonian_terms())
         ansatz = TwoLocal(self.num_qubits, "ry", "cz")
         decomposed_ansatz = ansatz.decompose()
         qlm_circuit = qiskit_to_qlm(decomposed_ansatz)

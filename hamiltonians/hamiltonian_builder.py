@@ -1,3 +1,7 @@
+import cirq
+from qiskit.quantum_info.operators import Operator, Pauli
+from qat.core import Observable, Term
+
 # =============================================================================
 # The HamiltonianBuilder class
 # =============================================================================
