@@ -1,6 +1,7 @@
 import cirq
 from qiskit.quantum_info.operators import Operator, Pauli
 from qat.core import Observable, Term
+from circuit_type.circuit import CircuitType
 
 # =============================================================================
 # The HamiltonianBuilder class
@@ -89,6 +90,14 @@ class HamiltonianBuilder:
             pauli_sum += term_pauli_string
         return pauli_sum
 
+    def get_hamiltonian(self, circuit_type: CircuitType):
+        if circuit_type == CircuitType.CIRQ:
+            return self.get_cirq_observable()
+        elif circuit_type == CircuitType.QLM:
+            return self.get_qlm_observable()
+        elif circuit_type == CircuitType.QISKIT:
+            return self.get_qiskit_hamiltonian()
+
 # =============================================================================
 # Example usage
 # =============================================================================
@@ -132,6 +141,6 @@ if __name__ == '__main__':
     print()
     
     # Get the third representation (Cirq PauliSum).
-    cirq_hamiltonian = ham_builder.get_cirq_hamiltonian()
+    cirq_hamiltonian = ham_builder.get_cirq_observable()
     print("Cirq representation:")
     print(cirq_hamiltonian)

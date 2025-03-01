@@ -1,3 +1,20 @@
+import numpy as np
+import pylab
+import matplotlib.pyplot as plt
+import random
+
+# --- QLM and Cirq Imports ---
+from qat.interop.qiskit import qiskit_to_qlm
+from qat.qpus import get_default_qpu
+from qat.plugins import ScipyMinimizePlugin
+from qat.interop.cirq import qlm_to_cirq
+import cirq
+
+# --- Hamiltonian Imports ---
+from hamiltonians.h_2 import get_h2_hamiltonian_terms
+from hamiltonians.hamiltonian_builder import HamiltonianBuilder
+
+
 import math
 import random
 import numpy as np
@@ -23,399 +40,191 @@ from qat.interop.qiskit import qiskit_to_qlm
 # ---------------------------------------------------
 import cirq
 from qat.interop.cirq import qlm_to_cirq
+from mathematical_tools.adam_optimizer import AdamOptimizer
+from circuit_type.circuit import CircuitType
+from mathematical_tools.expectations import ExpectationCalculator
 
-# ---------------------------------------------------
-# Custom HamiltonianBuilder (as given)
-# ---------------------------------------------------
-class HamiltonianBuilder:
-    def __init__(self, num_qubits, terms):
-        """
-        Parameters:
-            num_qubits (int): Number of qubits (and length of each Pauli string).
-            terms (list): List of terms (each either a tuple: (coefficient, pauli_string) or
-                          a dict with keys 'coefficient' and 'pauli').
-        """
-        self.num_qubits = num_qubits
-        self.terms = []
-        for term in terms:
-            if isinstance(term, dict):
-                coeff = term.get('coefficient')
-                pauli = term.get('pauli')
-            elif isinstance(term, (tuple, list)):
-                coeff, pauli = term
-            else:
-                raise ValueError("Each term must be a tuple or dict.")
-            if len(pauli) != num_qubits:
-                raise ValueError(f"Pauli string '{pauli}' length does not equal num_qubits={num_qubits}.")
-            self.terms.append({'coefficient': coeff, 'pauli': pauli})
+# TODO: mhh currenctly building the circuit contains a lot of repetitive code
+# the goal is to build a generalized ciruit builder or a vqa ciruitbuilder
+class SSVQEH2Solver:
+    def __init__(self):
+        pass
 
-    def get_qiskit_hamiltonian(self):
-        """
-        Returns the Hamiltonian as a sum of Operator(Pauli) objects.
-        """
-        hamiltonian = None
-        for term in self.terms:
-            coeff = term['coefficient']
-            pauli_str = term['pauli']
-            term_op = coeff * Operator(Pauli(pauli_str))
-            hamiltonian = term_op if hamiltonian is None else hamiltonian + term_op
-        return hamiltonian
+    def _build_qiskit_circuits():
+        qc = QuantumCircuit(4)
 
-    def get_qlm_observable(self) -> Observable:
-        """
-        Returns the Hamiltonian as an Observable (using QAT's Term objects).
-        """
-        pauli_terms = []
-        for term in self.terms:
-            coeff = term['coefficient']
-            pauli_str = term['pauli']
-            qubit_indices = list(range(self.num_qubits))
-            pauli_terms.append(Term(coeff, pauli_str, qubit_indices))
-        observable = Observable(self.num_qubits, pauli_terms=pauli_terms, constant_coeff=0)
-        return observable
+        D1 = 2
+        D2 = 8
+        num_p = 4*D1 + 8*D2 + 8
 
-    def get_cirq_observable(self):
-        """
-        Returns the Hamiltonian as a Cirq PauliSum.
-        """
-        qubits = [cirq.LineQubit(i) for i in range(self.num_qubits)]
-        pauli_sum = cirq.PauliSum()
-        for term in self.terms:
-            coeff = term['coefficient']
-            pauli_str = term['pauli']
-            ps_dict = {}
-            for i, letter in enumerate(pauli_str):
-                if letter == 'I':
-                    continue
-                elif letter == 'X':
-                    ps_dict[qubits[i]] = cirq.X
-                elif letter == 'Y':
-                    ps_dict[qubits[i]] = cirq.Y
-                elif letter == 'Z':
-                    ps_dict[qubits[i]] = cirq.Z
-                else:
-                    raise ValueError(f"Unsupported Pauli letter: '{letter}' in term '{pauli_str}'")
-            term_pauli_string = cirq.PauliString(ps_dict, coefficient=coeff)
-            pauli_sum += term_pauli_string
-        return pauli_sum
+        prs = [Parameter('p'+str(i)) for i in range(num_p)]
 
-# ---------------------------------------------------
-# Generic Adam Optimizer (backend–independent)
-# ---------------------------------------------------
-class AdamOptimizer:
-    def __init__(self, n_iter, alpha, beta1, beta2, eps=1e-8):
-        """
-        A simple Adam optimizer.
+        k = 0
+        for i in range(D1):
+            qc.rx(prs[k], 2)
+            k = k+1
+            qc.rx(prs[k], 3)
+            k = k+1
 
-        Args:
-            n_iter (int): Number of iterations.
-            alpha (float): Step size.
-            beta1 (float): Exponential decay factor for first moment.
-            beta2 (float): Exponential decay factor for second moment.
-            eps (float): A small number to avoid division by zero.
-        """
-        self.n_iter = n_iter
-        self.alpha = alpha
-        self.beta1 = beta1
-        self.beta2 = beta2
-        self.eps = eps
-        self.history = []  # Each entry: (iteration, parameter vector, cost)
+            qc.rz(prs[k], 2)
+            k = k+1
+            qc.rz(prs[k], 3)
+            k = k+1
 
-    def optimize(self, initial_params, grad_func):
-        """
-        Optimize parameters using the supplied gradient function.
+            qc.cz(2, 3)
 
-        Args:
-            initial_params (np.ndarray): Initial parameter vector.
-            grad_func (callable): Function f(x) returning (gradient, cost).
+        for i in range(D2):
+            qc.rx(prs[k], 0)
+            k = k+1
+            qc.rx(prs[k], 1)
+            k = k+1
+            qc.rx(prs[k], 2)
+            k = k+1
+            qc.rx(prs[k], 3)
+            k = k+1
 
-        Returns:
-            (best_params, best_cost)
-        """
-        x = np.array(initial_params, dtype=np.float32)
-        m = np.zeros_like(x)
-        v = np.zeros_like(x)
-        for t in range(self.n_iter):
-            g, cost = grad_func(x)
-            for i in range(len(x)):
-                m[i] = self.beta1 * m[i] + (1.0 - self.beta1) * g[i]
-                v[i] = self.beta2 * v[i] + (1.0 - self.beta2) * (g[i] ** 2)
-                mhat = m[i] / (1.0 - self.beta1 ** (t + 1))
-                vhat = v[i] / (1.0 - self.beta2 ** (t + 1))
-                x[i] = x[i] - self.alpha * mhat / (math.sqrt(vhat) + self.eps)
-            self.history.append((t, x.copy(), cost))
-            print(f"Iteration {t}: cost = {cost:.5f}")
-        return x, cost
+            qc.rz(prs[k], 0)
+            k = k+1
+            qc.rz(prs[k], 1)
+            k = k+1
+            qc.rz(prs[k], 2)
+            k = k+1
+            qc.rz(prs[k], 3)
+            k = k+1
 
-# ---------------------------------------------------
-# H2 Adam Solver: Encapsulates expectation, gradient, and Adam for three backends.
-# ---------------------------------------------------
-class H2AdamSolver:
-    def __init__(self, qc_ground, qc_excited, ham_builder: HamiltonianBuilder, num_qubits=4):
-        """
-        Initializes the variational H₂ solver.
+            
 
-        Args:
-            qc_ground (QuantumCircuit): Qiskit circuit for (approximate) ground state.
-            qc_excited (QuantumCircuit): Qiskit circuit for (approximate) excited state.
-            ham_builder (HamiltonianBuilder): Instance to build the Hamiltonian.
-            num_qubits (int): Number of qubits.
-        """
-        self.num_qubits = num_qubits
-        self.w = np.arange(num_qubits, num_qubits - 2, -1)  # e.g. for 4 qubits: [4, 3]
+            qc.cz(0, 1)
+            qc.cz(1, 2)
+            qc.cz(2, 3)
 
-        # Qiskit circuits
-        self.qcs_qiskit = [qc_ground, qc_excited]
-        self.H_qiskit = ham_builder.get_qiskit_hamiltonian()
+        qc.rx(prs[k], 0)
+        k = k+1
+        qc.rx(prs[k], 1)
+        k = k+1
+        qc.rx(prs[k], 2)
+        k = k+1
+        qc.rx(prs[k], 3)
+        k = k+1
 
-        # QLM circuits (converted from Qiskit)
-        self.qcs_qlm = [qiskit_to_qlm(qc) for qc in self.qcs_qiskit]
-        self.qlm_observable = ham_builder.get_qlm_observable()
+        qc.rz(prs[k], 0)
+        k = k+1
+        qc.rz(prs[k], 1)
+        k = k+1
+        qc.rz(prs[k], 2)
+        k = k+1
+        qc.rz(prs[k], 3)
+        k = k+1
+        qc2 = QuantumCircuit(4)
+        qc2.x(0)
+        qc2 = qc2.compose(qc)
+        return [qc, qc2]
 
-        # Cirq circuits (converted from QLM)
-        self.qcs_cirq = [qlm_to_cirq(q) for q in self.qcs_qlm]
-        # For parameter resolution assume all circuits share the same free variables.
-        self.all_variables = self.qcs_cirq[0].get_variables()
-        self.cirq_observable = ham_builder.get_cirq_observable()
+    # TODO mhh: those 3 solvers can be merged in one if we give them parameters 
+    def solve_with_qiskit(self):
+        h2_hamiltonian_builder = HamiltonianBuilder(get_h2_hamiltonian_terms())
+        qiskit_h2_hamiltonian = h2_hamiltonian_builder.get_qiskit_hamiltonian()
 
-        # Simulators
-        self.aer_simulator = Aer.get_backend('statevector_simulator')
-        self.cirq_simulator = cirq.Simulator()
+        qcs = self._build_qiskit_circuits()
 
-    # -------------------------
-    # Qiskit expectation & gradient
-    # -------------------------
-    def expectation_qiskit(self, circuit: QuantumCircuit, params):
-        circ = circuit.assign_parameters(params)
-        result = execute(circ, self.aer_simulator).result().get_statevector()
-        # Use Qiskit's built-in method (this syntax may vary with Qiskit versions)
-        return result.expectation_value(self.H_qiskit).real
+        w = np.arange(4, 2, -1)
 
-    def gradient_qiskit(self, params):
-        gradients = np.zeros(len(params))
-        cost = 0.0
-        params = list(params)
-        for i in range(self.num_qubits - 2):
-            for j in range(len(params)):
-                params1 = params[:]
-                params1[j] += np.pi / 2
-                params2 = params[:]
-                params2[j] -= np.pi / 2
-                term = self.w[i] * 0.5 * (
-                    self.expectation_qiskit(self.qcs_qiskit[i], params1) -
-                    self.expectation_qiskit(self.qcs_qiskit[i], params2)
-                )
-                gradients[j] += term
-            cost += self.w[i] * self.expectation_qiskit(self.qcs_qiskit[i], params)
-        return gradients, cost
+        local_trace = []
+        # define the total iterations
+        max_n_iter = 35
+        # steps size
+        alpha = 0.1
+        # factor for average gradient
+        beta1 = 0.9
+        # factor for average squared gradient
+        beta2 = 0.999
+        # perform the gradient descent search with adam
 
-    # -------------------------
-    # QLM expectation & gradient
-    # -------------------------
-    def expectation_qlm(self, crq, params):
-        vs = list(crq.get_variables())
-        binding = {vs[i]: params[i] for i in range(len(vs))}
-        crq_bound = crq.bind_variables(binding)
-        statevector = crq_bound.eval().statevector
-        result1 = np.matmul(statevector.conjugate().T, self.qlm_observable.to_matrix(sparse=False))
-        return float(np.matmul(result1, statevector).real)
+        adam_optimizer = AdamOptimizer(circuit_type=CircuitType.QISKIT)
+        best, score, local_trace = \
+            adam_optimizer.optimize(qcs = qcs, n_iter=max_n_iter,
+                                    alpha=alpha, beta1=beta1, beta2=beta2,
+                                    H=qiskit_h2_hamiltonian, w=w, num_qubits=4,
+                                    eps=1e-8)
+        print('Done!')
+        print('f(%s) = %f' % (best, score))
+        # here we are not returning energies
+        energies = [local_trace[i][2] for i in range(len(local_trace))]
+        best=local_trace[-1][1]
 
-    def gradient_qlm(self, params):
-        gradients = np.zeros(len(params))
-        cost = 0.0
-        params = list(params)
-        for i in range(self.num_qubits - 2):
-            for j in range(len(params)):
-                params1 = params[:]
-                params1[j] += np.pi / 2
-                params2 = params[:]
-                params2[j] -= np.pi / 2
-                term = self.w[i] * 0.5 * (
-                    self.expectation_qlm(self.qcs_qlm[i], params1) -
-                    self.expectation_qlm(self.qcs_qlm[i], params2)
-                )
-                gradients[j] += term
-            cost += self.w[i] * self.expectation_qlm(self.qcs_qlm[i], params)
-        return gradients, cost
+        expectation_calculator = ExpectationCalculator(circuit_type=CircuitType.QISKIT)
+        ground_state, excited_state \
+            = expectation_calculator.calculate(qcs[0], best, qiskit_h2_hamiltonian), \
+              expectation_calculator.calculate(qcs[1], best, qiskit_h2_hamiltonian)
+        return ground_state, excited_state
+    
+    def solve_with_qlm(self):
+        h2_hamiltonian_builder = HamiltonianBuilder(get_h2_hamiltonian_terms())
+        qlm_hamiltonian = h2_hamiltonian_builder.get_qlm_observable()
 
-    # -------------------------
-    # Cirq expectation & gradient
-    # -------------------------
-    def expectation_circ(self, circuit, params):
-        resolver = cirq.ParamResolver({self.all_variables[i]: params[i] for i in range(len(params))})
-        resolved_circuit = cirq.resolve_parameters(circuit, resolver)
-        resolved_circuit = cirq.drop_terminal_measurements(resolved_circuit)
-        result = self.cirq_simulator.simulate_expectation_values(
-            cirq.Circuit(resolved_circuit),
-            observables=[self.cirq_observable],
-            permit_terminal_measurements=False
-        )
-        return result[0].real
+        qc1, qc2 = self._build_qiskit_circuits()
+        qcs = [qiskit_to_qlm(qc1), qiskit_to_qlm(qc2)]
+        combined = []
 
-    def gradient_circ(self, params):
-        gradients = np.zeros(len(params))
-        cost = 0.0
-        params = list(params)
-        for i in range(self.num_qubits - 2):
-            for j in range(len(params)):
-                params1 = params[:]
-                params1[j] += np.pi / 2
-                params2 = params[:]
-                params2[j] -= np.pi / 2
-                term = self.w[i] * 0.5 * (
-                    self.expectation_circ(self.qcs_cirq[i], params1) -
-                    self.expectation_circ(self.qcs_cirq[i], params2)
-                )
-                gradients[j] += term
-            cost += self.w[i] * self.expectation_circ(self.qcs_cirq[i], params)
-        return gradients, cost
+        w = np.arange(4, 2, -1)
+        # define the total iterations
+        max_n_iter = 35
+        # steps size
+        alpha = 0.1
+        # factor for average gradient
+        beta1 = 0.9
+        # factor for average squared gradient
+        beta2 = 0.999
+        
+        adam_optimizer = AdamOptimizer(circuit_type=CircuitType.QISKIT)
+        best, score, local_trace = \
+            adam_optimizer.optimize(qcs = qcs, n_iter=max_n_iter,
+                                    alpha=alpha, beta1=beta1, beta2=beta2,
+                                    H=qlm_hamiltonian, w=w, num_qubits=4,
+                                    eps=1e-8)
+        print('Done!')
+        print('f(%s) = %f' % (best, score))
+        # here we are not returning energies
+        energies = [local_trace[i][2] for i in range(len(local_trace))]
+        best=local_trace[-1][1]
 
-    # -------------------------
-    # Optimization routines (using Adam)
-    # -------------------------
-    def optimize_qiskit(self, n_iter=35, alpha=0.1, beta1=0.9, beta2=0.999, initial_params=None):
-        if initial_params is None:
-            # Assume the Qiskit circuit's parameters define the dimension.
-            num_params = len(list(self.qcs_qiskit[0].parameters))
-            initial_params = np.array([random.gauss(0, 2 * np.pi) for _ in range(num_params)], dtype=np.float32)
-        optimizer = AdamOptimizer(n_iter, alpha, beta1, beta2)
-        best_params, best_cost = optimizer.optimize(initial_params, self.gradient_qiskit)
-        return best_params, best_cost, optimizer.history
+        expectation_calculator = ExpectationCalculator(circuit_type=CircuitType.QISKIT)
+        ground_state, excited_state \
+            = expectation_calculator.calculate(qcs[0], best, qlm_hamiltonian), \
+              expectation_calculator.calculate(qcs[1], best, qlm_hamiltonian)
+        return ground_state, excited_state
+    
+    def solve_with_cirq(self):
+        h2_hamiltonian_builder = HamiltonianBuilder(get_h2_hamiltonian_terms())
+        hamiltonian = h2_hamiltonian_builder.get_cirq_observable()
 
-    def optimize_qlm(self, n_iter=35, alpha=0.1, beta1=0.9, beta2=0.999, initial_params=None):
-        if initial_params is None:
-            num_params = len(self.qcs_qlm[0].get_variables())
-            initial_params = np.array([random.gauss(0, 2 * np.pi) for _ in range(num_params)], dtype=np.float32)
-        optimizer = AdamOptimizer(n_iter, alpha, beta1, beta2)
-        best_params, best_cost = optimizer.optimize(initial_params, self.gradient_qlm)
-        return best_params, best_cost, optimizer.history
+        qc1, qc2 = self._build_qiskit_circuits()
+        qcs = [qlm_to_cirq(qiskit_to_qlm(qc1)), qlm_to_cirq(qiskit_to_qlm(qc2))]
 
-    def optimize_cirq(self, n_iter=35, alpha=0.1, beta1=0.9, beta2=0.999, initial_params=None):
-        if initial_params is None:
-            num_params = len(self.all_variables)
-            initial_params = np.array([random.gauss(0, 2 * np.pi) for _ in range(num_params)], dtype=np.float32)
-        optimizer = AdamOptimizer(n_iter, alpha, beta1, beta2)
-        best_params, best_cost = optimizer.optimize(initial_params, self.gradient_circ)
-        return best_params, best_cost, optimizer.history
+        w = np.arange(4, 2, -1)
+        # define the total iterations
+        max_n_iter = 35
+        # steps size
+        alpha = 0.1
+        # factor for average gradient
+        beta1 = 0.9
+        # factor for average squared gradient
+        beta2 = 0.999
+        
+        adam_optimizer = AdamOptimizer(circuit_type=CircuitType.QISKIT)
+        best, score, local_trace = \
+            adam_optimizer.optimize(qcs = qcs, n_iter=max_n_iter,
+                                    alpha=alpha, beta1=beta1, beta2=beta2,
+                                    H=hamiltonian, w=w, num_qubits=4,
+                                    eps=1e-8)
+        print('Done!')
+        print('f(%s) = %f' % (best, score))
+        # here we are not returning energies
+        energies = [local_trace[i][2] for i in range(len(local_trace))]
+        best=local_trace[-1][1]
 
-    # -------------------------
-    # Helpers to obtain final energies
-    # -------------------------
-    def get_ground_and_excited_energy_qiskit(self, params):
-        ground = self.expectation_qiskit(self.qcs_qiskit[0], params)
-        excited = self.expectation_qiskit(self.qcs_qiskit[1], params)
-        return ground, excited
-
-    def get_ground_and_excited_energy_qlm(self, params):
-        ground = self.expectation_qlm(self.qcs_qlm[0], params)
-        excited = self.expectation_qlm(self.qcs_qlm[1], params)
-        return ground, excited
-
-    def get_ground_and_excited_energy_cirq(self, params):
-        ground = self.expectation_circ(self.qcs_cirq[0], params)
-        excited = self.expectation_circ(self.qcs_cirq[1], params)
-        return ground, excited
-
-# ---------------------------------------------------
-# Example Usage
-# ---------------------------------------------------
-if __name__ == '__main__':
-    warnings.filterwarnings('ignore')
-
-    # --- Build the H2 Hamiltonian ---
-    # Here we assume that get_h2_hamiltonian_terms is defined in your hamiltonians.h_2 module.
-    # For demonstration we mimic the terms used in your file.
-    h2_terms = [
-        (-0.24274280046588792, 'IIZI'),
-        (-0.24274280046588792, 'IIIZ'),
-        (-0.04207898539364302, 'IIII'),
-        (0.17771287502681438, 'ZIII'),
-        (0.1777128750268144,  'IZII'),
-        (0.12293305045316086, 'ZIZI'),
-        (0.12293305045316086, 'IZIZ'),
-        (0.16768319431887935, 'ZIIZ'),
-        (0.16768319431887935, 'IZZI'),
-        (0.1705973836507714,  'ZZII'),
-        (0.1762764072240811,  'IIZZ'),
-        (-0.044750143865718496, 'YYXX'),
-        (-0.044750143865718496, 'XXYY'),
-        (0.044750143865718496, 'YXXY'),
-        (0.044750143865718496, 'XYYX')
-    ]
-    num_qubits = 4
-    ham_builder = HamiltonianBuilder(num_qubits, h2_terms)
-
-    # --- Build the variational ansatz ---
-    # Construct a Qiskit circuit for the ground state ansatz.
-    qc = QuantumCircuit(num_qubits)
-    # For demonstration, we define two layers (D1 and D2) as in your file.
-    D1 = 2
-    D2 = 8
-    num_p = 4 * D1 + 8 * D2 + 8
-    parameters = [Parameter(f'p{i}') for i in range(num_p)]
-    k = 0
-    for i in range(D1):
-        qc.rx(parameters[k], 2); k += 1
-        qc.rx(parameters[k], 3); k += 1
-        qc.rz(parameters[k], 2); k += 1
-        qc.rz(parameters[k], 3); k += 1
-        qc.cz(2, 3)
-    for i in range(D2):
-        qc.rx(parameters[k], 0); k += 1
-        qc.rx(parameters[k], 1); k += 1
-        qc.rx(parameters[k], 2); k += 1
-        qc.rx(parameters[k], 3); k += 1
-        qc.rz(parameters[k], 0); k += 1
-        qc.rz(parameters[k], 1); k += 1
-        qc.rz(parameters[k], 2); k += 1
-        qc.rz(parameters[k], 3); k += 1
-        qc.cz(0, 1)
-        qc.cz(1, 2)
-        qc.cz(2, 3)
-    qc.rx(parameters[k], 0); k += 1
-    qc.rx(parameters[k], 1); k += 1
-    qc.rx(parameters[k], 2); k += 1
-    qc.rx(parameters[k], 3); k += 1
-    qc.rz(parameters[k], 0); k += 1
-    qc.rz(parameters[k], 1); k += 1
-    qc.rz(parameters[k], 2); k += 1
-    qc.rz(parameters[k], 3); k += 1
-
-    # Define a second circuit (for an excited state guess) by applying an extra X gate.
-    qc2 = QuantumCircuit(num_qubits)
-    qc2.x(0)
-    qc2 = qc2.compose(qc)
-
-    # --- Instantiate the H2AdamSolver ---
-    solver = H2AdamSolver(qc, qc2, ham_builder, num_qubits=num_qubits)
-
-    # --- Optimize using Qiskit/Aer backend ---
-    print("\nOptimizing using Qiskit/Aer:")
-    best_params_qiskit, cost_qiskit, history_qiskit = solver.optimize_qiskit(n_iter=35, alpha=0.1)
-    ground_qiskit, excited_qiskit = solver.get_ground_and_excited_energy_qiskit(best_params_qiskit)
-    print("Qiskit ground state energy:", ground_qiskit)
-    print("Qiskit excited state energy:", excited_qiskit)
-
-    # --- Optimize using QLM backend ---
-    print("\nOptimizing using QLM:")
-    best_params_qlm, cost_qlm, history_qlm = solver.optimize_qlm(n_iter=35, alpha=0.1)
-    ground_qlm, excited_qlm = solver.get_ground_and_excited_energy_qlm(best_params_qlm)
-    print("QLM ground state energy:", ground_qlm)
-    print("QLM excited state energy:", excited_qlm)
-
-    # --- Optimize using Cirq backend ---
-    print("\nOptimizing using Cirq:")
-    best_params_cirq, cost_cirq, history_cirq = solver.optimize_cirq(n_iter=35, alpha=0.1)
-    ground_cirq, excited_cirq = solver.get_ground_and_excited_energy_cirq(best_params_cirq)
-    print("Cirq ground state energy:", ground_cirq)
-    print("Cirq excited state energy:", excited_cirq)
-
-    # --- Plot optimization history (using Qiskit as an example) ---
-    energies = [entry[2] for entry in history_qiskit]
-    plt.figure()
-    plt.plot(range(len(energies)), energies, marker='o')
-    plt.xlabel("Iteration")
-    plt.ylabel("Cost")
-    plt.title("Qiskit/Aer Optimization History (Adam)")
-    plt.grid(True)
-    plt.show()
+        expectation_calculator = ExpectationCalculator(circuit_type=CircuitType.QISKIT)
+        ground_state, excited_state \
+            = expectation_calculator.calculate(qcs[0], best, hamiltonian), \
+              expectation_calculator.calculate(qcs[1], best, hamiltonian)
+        return ground_state, excited_state
