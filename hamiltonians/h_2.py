@@ -20,3 +20,19 @@ def get_h2_hamiltonian_terms() -> list[tuple[float, str]]:
         (0.044750143865718496, 'XYYX')
     ]
     return hamiltonian_terms
+
+def get_h2_tfi_hamiltonian_terms() -> list[tuple[str, float]]:
+    h = 0.25
+    hamiltonian_terms = [
+        ("ZZIIII", -1),
+        ("IZZIII", -1),
+        ("IIZZII", -1),
+        ("IIIZZI", -1),
+        ("IIIIZZ", -1),
+        ("XIIIII", -h),
+        ("IXIIII", -h),
+        ("IIXIII", -h),
+        ("IIIXII", -h),
+        ("IIIIXI", -h),
+        ("IIIIIX", -h)]
+    return hamiltonian_terms

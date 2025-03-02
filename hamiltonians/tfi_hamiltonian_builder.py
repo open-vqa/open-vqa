@@ -2,13 +2,14 @@ import cirq
 from qiskit.quantum_info.operators import Operator, Pauli
 from qat.core import Observable, Term
 from circuit_type.circuit import CircuitType
+from hamiltonians.h_2 import get_h2_tfi_hamiltonian_terms
+from qiskit.quantum_info import SparsePauliOp, PauliList
 
 # =============================================================================
 # The HamiltonianBuilder class
 # =============================================================================
 
-# TODO mhh: combine both hamiltonians into 1 hamiltonian
-class HamiltonianBuilder:
+class TFIHamiltonianBuilder:
     def __init__(self, num_qubits, terms):
         """
         Parameters:
@@ -25,27 +26,24 @@ class HamiltonianBuilder:
                 coeff = term.get('coefficient')
                 pauli = term.get('pauli')
             elif isinstance(term, (tuple, list)):
-                coeff, pauli = term
+                pauli, coeff = term
             else:
                 raise ValueError("Each term must be a tuple or dict.")
             if len(pauli) != num_qubits:
                 raise ValueError(f"Pauli string '{pauli}' length does not equal num_qubits={num_qubits}.")
             self.terms.append({'coefficient': coeff, 'pauli': pauli})
 
+
     def get_qiskit_hamiltonian(self):
         """
         Returns the Hamiltonian as a sum of Operator(Pauli) objects.
         """
-        hamiltonian = None
+        built_terms = []
         for term in self.terms:
             coeff = term['coefficient']
             pauli_str = term['pauli']
-            # Create an operator from the Pauli string.
-            term_op = coeff * Operator(Pauli(pauli_str))
-            if hamiltonian is None:
-                hamiltonian = term_op
-            else:
-                hamiltonian = hamiltonian + term_op
+            built_terms.append((pauli_str, coeff))
+        hamiltonian = SparsePauliOp.from_list(built_terms)
         return hamiltonian
 
     def get_qlm_observable(self)-> Observable:
@@ -70,25 +68,26 @@ class HamiltonianBuilder:
         # Create a list of Cirq qubits.
         qubits = [cirq.LineQubit(i) for i in range(self.num_qubits)]
         # Build a PauliSum from individual PauliStrings.
-        pauli_sum = cirq.PauliSum()  # start with an empty sum
+        pauli_sum = 0 # start with an empty sum
         for term in self.terms:
             coeff = term['coefficient']
             pauli_str = term['pauli']
-            ps_dict = {}
+            term_pauli_string = coeff
             for i, letter in enumerate(pauli_str):
                 if letter == 'I':
                     continue
                 elif letter == 'X':
-                    ps_dict[qubits[i]] = cirq.X
+                    term_pauli_string *= cirq.X(qubits[i])
                 elif letter == 'Y':
-                    ps_dict[qubits[i]] = cirq.Y
+                    term_pauli_string *= cirq.X(qubits[i])
                 elif letter == 'Z':
-                    ps_dict[qubits[i]] = cirq.Z
+                    term_pauli_string *= cirq.X(qubits[i])
                 else:
                     raise ValueError(f"Unsupported Pauli letter: '{letter}' in term '{pauli_str}'")
             # Construct the PauliString with the given coefficient.
-            term_pauli_string = cirq.PauliString(ps_dict, coefficient=coeff)
-            pauli_sum += term_pauli_string
+
+            if term_pauli_string != coeff:
+                pauli_sum += term_pauli_string
         return pauli_sum
 
     def get_hamiltonian(self, circuit_type: CircuitType):
@@ -106,42 +105,17 @@ class HamiltonianBuilder:
 if __name__ == '__main__':
     # Define the list of Hamiltonian terms.
     # (Each term: (coefficient, pauli_string))
-    terms = [
-        (-0.24274280046588792, 'IIZI'),
-        (-0.24274280046588792, 'IIIZ'),
-        (-0.04207898539364302, 'IIII'),
-        (0.17771287502681438, 'ZIII'),
-        (0.1777128750268144,  'IZII'),
-        (0.12293305045316086, 'ZIZI'),
-        (0.12293305045316086, 'IZIZ'),
-        (0.16768319431887935, 'ZIIZ'),
-        (0.16768319431887935, 'IZZI'),
-        (0.1705973836507714,  'ZZII'),
-        (0.1762764072240811,  'IIZZ'),
-        (-0.044750143865718496, 'YYXX'),
-        (-0.044750143865718496, 'XXYY'),
-        (0.044750143865718496, 'YXXY'),
-        (0.044750143865718496, 'XYYX')
-    ]
-    
-    num_qubits = 4
-    
-    # Instantiate the builder.
-    ham_builder = HamiltonianBuilder(num_qubits, terms)
-    
-    # Get the first representation (Operator/Pauli objects).
-    operator_hamiltonian = ham_builder.get_qiskit_hamiltonian()
-    print("Operator representation:")
-    print(operator_hamiltonian)
-    print()
-    
-    # Get the second representation (Observable object).
-    observable_hamiltonian = ham_builder.get_qlm_observable()
-    print("Observable representation:")
-    print(observable_hamiltonian)
-    print()
-    
-    # Get the third representation (Cirq PauliSum).
-    cirq_hamiltonian = ham_builder.get_cirq_observable()
-    print("Cirq representation:")
-    print(cirq_hamiltonian)
+    h = 0.25
+    hamiltonian_terms = [
+        ("ZZIIII", -1),
+        ("IZZIII", -1),
+        ("IIZZII", -1),
+        ("IIIZZI", -1),
+        ("IIIIZZ", -1),
+        ("XIIIII", -h),
+        ("IXIIII", -h),
+        ("IIXIII", -h),
+        ("IIIXII", -h),
+        ("IIIIXI", -h),
+        ("IIIIIX", -h)]
+
