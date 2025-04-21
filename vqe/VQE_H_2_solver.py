@@ -23,7 +23,7 @@ from hamiltonians.hamiltonian_builder import HamiltonianBuilder
 
 
 class VQEH2Solver:
-    def __init__(self, num_qubits=4, maxiter=100):
+    def __init__(self, maxiter=100):
         """
         Initializes immutable parameters for the solver.
         
@@ -31,10 +31,9 @@ class VQEH2Solver:
         created locally within the methods.
         
         Args:
-            num_qubits (int): Number of qubits.
             maxiter (int): Maximum iterations for Qiskit's SLSQP optimizer.
         """
-        self.num_qubits = num_qubits
+        self.num_qubits = 4
         self.maxiter = maxiter
 
     def solve_with_qiskit(self):
@@ -220,7 +219,7 @@ class VQEH2Solver:
 
 # --- Example Usage ---
 if __name__ == "__main__":
-    solver = VQEH2Solver(num_qubits=4, maxiter=100)
+    solver = VQEH2Solver(maxiter=100)
     
     # Solve using Qiskit's VQE
     qiskit_result = solver.solve_with_qiskit()
