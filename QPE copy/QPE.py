@@ -1,15 +1,13 @@
 from qiskit import *
-import numpy as np
 #from qiskit.tools.jupyter import *
 from qiskit.visualization import *
-from qiskit.opflow import X,Y,Z,I,CX
 from qiskit.circuit.library import QFT
 # ------------------------------------------------
 # The QPEAlgorithm Class
 # ------------------------------------------------
 class QPEAlgorithm:
-    def __init__(self, evolution_gate, w_qubits = 3, s_qubits = 2,
-                 trotter_number=1, t=1, initial_state=np.array([1, 0, 0, 0])):
+    def __init__(self, w_qubits, s_qubits, evolution_operator, 
+                 trotter_number=1, t=1, initial_state=None):
         """
         Initializes the QPE algorithm.
 
@@ -29,11 +27,15 @@ class QPEAlgorithm:
         self.trotter_number = trotter_number
         self.t = t
         self.initial_state = initial_state
+        self.evolution_operator = evolution_operator
         # Build the controlled evolution gate.
         # First, construct a minimal circuit that implements the operator.
-
+        self.evolution_gate = self.qc_from_operator(evolution_operator)\
+                                  .to_gate(label='U')\
+                                  .control(1)
+    
     @staticmethod
-    def qiskit_qc_from_operator(operator):
+    def qc_from_operator(operator):
         """
         Constructs a QuantumCircuit that applies a given unitary operator.
         
@@ -43,13 +45,12 @@ class QPEAlgorithm:
         Returns:
             QuantumCircuit: A circuit implementing the operator on the minimal number of qubits.
         """
-        qubit_list = list(range(int(np.log(len(operator))
-                                /np.log(2)))) #extract the no. of qubits req. in circuit 
-        qc = QuantumCircuit(len(qubit_list))
-        qc.unitary(operator,qubit_list)
+        num_qubits = int(np.log(len(operator)) / np.log(2))
+        qc = QuantumCircuit(num_qubits)
+        qc.unitary(operator, list(range(num_qubits)), label='U')
         return qc
 
-    def build_qpe_circuit(self, evolution_gate):
+    def build_qpe_circuit(self):
         """
         Constructs the full QPE circuit using trotterization and an inverse QFT.
         
@@ -71,14 +72,13 @@ class QPEAlgorithm:
         # --- Trotterization ---
         # For each trotter step, apply controlled-U^(2^k) operations.
         for _ in range(self.trotter_number):
-            # TODO mhh: ask hussein why repetitions is set to 1 all the times in notebook
             repetitions = 1
             for counting_qubit in range(self.w_qubits):
-                for _i in range(repetitions):
+                for _ in range(repetitions):
                     # The controlled gate acts on the counting (witness) qubit
                     # and all system qubits.
                     qubit_list = [counting_qubit] + list(range(self.w_qubits, total_qubits))
-                    qpe_circ.append(evolution_gate, qubit_list)
+                    qpe_circ.append(self.evolution_gate, qubit_list)
                 repetitions *= 2  # Increase the power for the next witness qubit.
         
         # --- Inverse QFT ---
@@ -88,7 +88,7 @@ class QPEAlgorithm:
         
         return qpe_circ
 
-    def add_measurements(self, circuit: QuantumCircuit):
+    def add_measurements(self, circuit):
         """
         Adds measurement to the witness (ancilla) qubits.
         
@@ -101,23 +101,31 @@ class QPEAlgorithm:
         circuit.measure(list(range(self.w_qubits)), list(range(self.w_qubits)))
         return circuit
 
-    def plot_to_eigenval(self, count,t,n=1):
-        w_qubits = len(list(count.keys())[0])
-        list_ = []
-        #if time step is zero then phase cannot be determined hence return a default 0
-        if t == 0: 
+    @staticmethod
+    def plot_to_eigenval(counts, t, n=1):
+        """
+        Computes eigenvalue estimates from the measurement counts.
+
+        Args:
+            counts (dict): Measurement counts (keys are bitstrings).
+            t (float): The time parameter.
+            n (int): Number of top outcomes to use for estimation.
+        
+        Returns:
+            list: A list of tuples (positive_eigenvalue, negative_eigenvalue) estimates.
+        """
+        if t == 0:
             return 0
-        #will choose n maximum count values
-        lists = sorted(count, key=count.get, reverse=True)[:n] 
-        for j in range(len(lists)):
-            #convert those binary keys into decimal
-            lists[j] =  int(str(lists[j]), 2) 
-        for j in range(len(lists)):
-            #for positive eigenvalues choose this equation
-            list_.append((2*pi*(2**w_qubits - lists[j]))/((2**w_qubits)*t))
-            # if it is negative then choose this value
-            lists[j] = -2*pi*(lists[j])/((2**w_qubits)*t) 
-        return lists,list_
+        # Determine number of witness qubits from the bitstring length.
+        w_qubits = len(list(counts.keys())[0])
+        sorted_keys = sorted(counts, key=counts.get, reverse=True)[:n]
+        eigenvals = []
+        for key in sorted_keys:
+            val = int(key, 2)
+            pos = (2 * np.pi * (2**w_qubits - val)) / ((2**w_qubits) * t)
+            neg = -2 * np.pi * (val) / ((2**w_qubits) * t)
+            eigenvals.append((pos, neg))
+        return eigenvals
 
     def run_qiskit(self, shots=8192):
         """
@@ -129,27 +137,11 @@ class QPEAlgorithm:
         Returns:
             dict: The counts dictionary from the simulation.
         """
-
-        pi = np.pi
-        sin = np.sin
-        cos = np.cos
-        exp = np.exp
-
-        # taking no. of trotter step = 1, as all the operators in H commutes in this case.
-        trotter_number = 2
-        t = 1 # delta t, time
-        H = (0.33*t/trotter_number*Z^I)+(3.24*t/trotter_number*I^Z)+(1.17*t/trotter_number*Z^Z)
-        U = H.exp_i() #obtaining the evolution operator for H with t = 1
-        U = U.to_matrix()
-        U_gate = self.qiskit_qc_from_operator(U).to_gate(label = 'U').control(1)
-
-        circuit = self.build_qpe_circuit(U_gate)
-        instructions = self.add_measurements(circuit)
-
+        circuit = self.build_qpe_circuit()
+        circuit = self.add_measurements(circuit)
         simulator = Aer.get_backend('qasm_simulator')
         result = execute(circuit, backend=simulator, shots=shots).result()
         counts = result.get_counts(circuit)
-        # TODO mhh: figure out hussein intensions here
         return counts
 
     def transpile_circuit(self, basis_gates=['rx', 'u2', 'cx', 'ry', 'h', 'rz', 'P']):
