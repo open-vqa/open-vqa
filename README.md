@@ -1,14 +1,10 @@
 # Open VQA
 
-**IMPORTANT**: This software requires a valid subscription to use in production environments. 
-For details, please see the [LICENSE](./LICENSE.md).
+OpenVQA is a comprehensive quantum computing package designed for implementation on Noisy Intermediate-Scale Quantum (NISQ) devices. It integrates a suite of advanced algorithms, including the Variational Quantum Eigensolver (VQE) tailored for quantum chemistry, the Quantum Approximate Optimization Algorithm (QAOA) for combinatorial optimization, Quantum Phase Estimation (QPE), and the Variational Hamiltonian Ansatz, among others. These algorithms extend across domains such as chemistry, physics, and complex optimization problems.
 
-## Overview
-<!-- to be filled -->
+What truly distinguishes OpenVQA is its unique interoperability across multiple leading quantum programming frameworks, including IBM’s Qiskit, Atos/Eviden’s MyQLM, and Google’s Cirq. This cross-compatibility significantly enhances collaboration and accelerates development among engineers and researchers working within diverse quantum software ecosystems.
 
-## Licensing & Subscription
-You must purchase or hold a valid subscription from OPEN VQA to use 
-this software in production. For pricing and subscription options, see: 
-<!-- a website we should create. -->
 
-If you have any questions, please reach out at [<!-- an email we should add -->].
+If you have any questions, please reach out at [Mohammadhaidar2016@outlook.com].
+
+You can also check another package we developed as [https://github.com/OpenVQE/OpenVQE]
