@@ -166,11 +166,6 @@ class QNSPSA_PSR_Calculator:
                 term = w[i] * 0.5 * (self.expectation_calculator.calculate(qcs[i], parameters1, H) -
                                      self.expectation_calculator.calculate(qcs[i], parameters2, H))
                 grad_vec[j] = term
-        
-            
-                # 2nd-SPSA amplitude perturbations    
-                second_term = 1/(8*delta**2) * (self.expectation_calculator.calculate(qcs[i], parameters + delta*(spsa_vector_1+spsa_vector_2), H) - self.expectation_calculator.calculate(qcs[i], parameters + delta*(spsa_vector_1), H)- self.expectation_calculator.calculate(qcs[i], parameters - delta*(spsa_vector_1-spsa_vector_2), H) + self.expectation_calculator.calculate(qcs[i], parameters - delta*spsa_vector_1, H))
-                spsa_fubini_term = second_term*(np.outer(spsa_vector_1, spsa_vector_2) + np.outer(spsa_vector_2, spsa_vector_1))
                 
             # Update gradients using pseudo-inverse of Fubini matrix approximation
             term_update = np.linalg.pinv(spsa_fubini_term).dot(grad_vec)
