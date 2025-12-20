@@ -44,7 +44,7 @@ class SPSAGradientCalculator:
             # Parameter vector all shift at once
             parameters1 += spsa_vector
             parameters2 += -spsa_vector
-            if order==1:
+            if order == 1:
                 
                 term = w[i] * 1/delta * (self.expectation_calculator.calculate(qcs[i], parameters1, H) -
                                         self.expectation_calculator.calculate(qcs[i], parameters2, H)) * spsa_vector_0
@@ -52,7 +52,7 @@ class SPSAGradientCalculator:
                 cost += w[i] * self.expectation_calculator.calculate(qcs[i], parameters, H)
         
         
-            else:
+            else if order == 2:
                 
                 # 2nd-SPSA amplitude perturbations    
                 second_term = 1/(8*delta**2) * (self.expectation_calculator.calculate(qcs[i], parameters + delta*(spsa_vector_1+spsa_vector_2), H) - self.expectation_calculator.calculate(qcs[i], parameters + delta*(spsa_vector_1), H)- self.expectation_calculator.calculate(qcs[i], parameters - delta*(spsa_vector_1-spsa_vector_2), H) + self.expectation_calculator.calculate(qcs[i], parameters - delta*spsa_vector_1, H))
