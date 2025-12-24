@@ -1,0 +1,24 @@
+[tool.ruff]
+line-length = 88  # Adjust the max line length as needed
+target-version = "py310"  # Adjust based on your Python version (e.g., py39, py38, etc.)
+
+# Enable or disable rules by category or by specific error code
+select = ["E", "F", "W", "C90"]
+# Exclude directories you don't want to lint
+exclude = [
+    ".git",
+    ".github"
+    "__pycache__",
+    "venv",
+    ".venv",
+    "migrations",
+    "build",
+    "dist",
+]
+
+# Additional rule-specific configuration (example: max line complexity)
+[tool.ruff.per-file-ignores]
+"tests/*" = ["E501"]  # Ignore line-length errors in test files
+
+[tool.ruff.mccabe]
+max-complexity = 10  # Maximum allowed cyclomatic complexity
