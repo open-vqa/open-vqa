@@ -9,6 +9,9 @@
 | **BFGS** | Quasi-Newton | `optimizer="bfgs"` | Gradient-based, fast |
 | **Adam** | Adaptive | `optimizer="adam"` | Large-scale, noisy |
 
+Adam runs on PennyLane's `default.qubit` (also with the myQLM engine) and supports
+`ryrz` and the PennyLane templates only.
+
 ## Quick Start
 
 ### VQE Example
@@ -53,14 +56,13 @@ vqe = VQE(
 | Memory Efficient | ✅ | ✅ | ❌ | ✅ |
 | Large-scale | ❌ | ❌ | ✅ | ✅ |
 
-### Typical Iteration Counts
+### Iteration Counts
 
-| Problem | COBYLA | Nelder-Mead | BFGS | Adam |
-|---------|--------|-------------|------|------|
-| VQE (2 qubits) | 50-100 | 50-100 | 30-50 | 100-200 |
-| VQE (4 qubits) | 100-200 | 100-200 | 50-100 | 200-400 |
-| QAOA (p=1) | 30-50 | 30-50 | 20-30 | 50-100 |
-| QAOA (p=2) | 50-100 | 50-100 | 30-60 | 100-200 |
+Counts depend on the problem, `shots` and the starting point, so check each run:
+`results.n_evaluations` gives the evaluations used and `results.convergence` the
+optimizer's own success flag. For example, VQE on the 2-qubit H2 model with
+`ryrz` and `shots=0` needed 197 COBYLA evaluations, while Nelder-Mead was still
+at +0.06 after 100 iterations and reached -0.5 within 400.
 
 ## Interactive Notebook Selection
 
@@ -80,7 +82,7 @@ Enter 1/2/3/4 (default 1):
 ### Optimizer Not Converging?
 - **COBYLA**: Increase `max_iterations`
 - **Nelder-Mead**: Try COBYLA instead
-- **BFGS**: Check if gradients are available
+- **BFGS**: Use `shots=0`; its numerical gradients stall on sampling noise
 - **Adam**: Reduce `learning_rate`
 
 ### Slow Optimization?

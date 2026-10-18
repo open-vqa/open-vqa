@@ -27,6 +27,7 @@ The OpenVQA package now supports multiple classical optimizers for VQE and QAOA 
 - **Best for**: Large-scale optimization, noisy gradients
 - **Usage**: `optimizer="adam"`
 - **Options**: Can specify `learning_rate` in `optimizer_options`
+- **Runs on**: PennyLane `default.qubit`, also with the myQLM engine; the ansatz must be `ryrz` or a PennyLane template
 
 ## New Folder Structure
 
@@ -82,7 +83,7 @@ vqe_bfgs = VQE(
 # Example 4: Adam with custom learning rate
 vqe_adam = VQE(
     hamiltonian="H2",
-    ansatz="RealAmplitudes",
+    ansatz="ryrz",  # Adam runs on PennyLane: ryrz or a PennyLane template
     optimizer="adam",
     max_iterations=200,
     optimizer_options={'learning_rate': 0.01}
@@ -146,7 +147,7 @@ Both `vqe_demo.ipynb` and `qaoa_demo.ipynb` now include:
 
 ### Notebook Workflow
 
-1. **Backend Selection**: Choose QLM, Qiskit, or PennyLane
+1. **Backend Selection**: myQLM (default); the menu's Qiskit simulator option is not implemented yet and raises an error
 2. **Template Selection**: Choose feature maps and ansatz
 3. **Optimizer Selection**: Choose from COBYLA, Nelder-Mead, BFGS, or Adam
 4. **Configuration**: Set optimizer-specific parameters (e.g., learning rate)

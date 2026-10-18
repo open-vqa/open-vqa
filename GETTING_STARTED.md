@@ -5,9 +5,9 @@
 OpenVQA is a high-level Python framework for running **Variational Quantum Algorithms (VQA)** with an elegant, intuitive API. It abstracts away the complexity of quantum circuit construction, optimization, and result handling.
 
 The framework supports:
-- **VQE** (Variational Quantum Eigensolver) - Find ground state energies of molecules
+- **VQE** (Variational Quantum Eigensolver) - Find the lowest energy of a Hamiltonian (built-in illustrative H2 and LiH models)
 - **QAOA** (Quantum Approximate Optimization Algorithm) - Solve combinatorial problems
-- **Multiple backends** - QLM (myQLM), Qiskit, and more
+- **Two backends** - the myQLM simulator (circuits built with Qiskit) and PennyLane `default.qubit`
 - **Pre-built components** - Hamiltonians, ansatze, and optimizers
 
 ## Installation
@@ -34,9 +34,9 @@ from openvqa import VQA_myQLM
 
 engine = VQA_myQLM(
     n_qubits=4,              # Number of qubits
-    backend="qat.simulators.qubit",  # Backend
-    shots=1000,              # Measurement shots
-    seed=42,                 # Reproducibility
+    backend="qat.simulators.qubit",  # myQLM simulator, or "pennylane"
+    shots=0,                 # 0 = exact expectation values; >0 = sampled
+    seed=42,                 # Reproducible runs (with shots=0)
     verbose=True             # Print progress
 )
 ```
@@ -95,14 +95,14 @@ from openvqa import VQA_myQLM
 from openvqa.algorithms import VQE
 
 # Setup
-engine = VQA_myQLM(n_qubits=2, seed=42)
-vqe = VQE(hamiltonian="H2", ansatz="ryrz", optimizer="cobyla")
+engine = VQA_myQLM(n_qubits=2, shots=0, seed=42)
+vqe = VQE(hamiltonian="H2", ansatz="ryrz", optimizer="cobyla", max_iterations=300)
 
 # Run
 results = engine.run(vqe)
 
 # Results
-print(f"Ground state energy: {results.energy:.6f} Ha")
+print(f"Energy: {results.energy:.6f} (exact minimum -0.5)")
 print(f"Converged: {results.convergence}")
 ```
 
@@ -134,7 +134,7 @@ optimizers = ["cobyla", "nelder-mead", "bfgs"]
 energies = {}
 
 for opt_name in optimizers:
-    engine = VQA_myQLM(n_qubits=2, seed=42)
+    engine = VQA_myQLM(n_qubits=2, shots=0, seed=42)
     vqe = VQE(hamiltonian="H2", optimizer=opt_name, max_iterations=100)
     results = engine.run(vqe)
     energies[opt_name] = results.energy
@@ -142,7 +142,7 @@ for opt_name in optimizers:
 # Print comparison
 print("Optimizer Comparison:")
 for opt, energy in sorted(energies.items(), key=lambda x: x[1]):
-    print(f"  {opt:12s}: {energy:.8f} Ha")
+    print(f"  {opt:12s}: {energy:.8f}")
 ```
 
 ### Pattern 4: Vary Ansatz Depth
@@ -155,14 +155,14 @@ depths = [1, 2, 3, 4]
 results_by_depth = {}
 
 for depth in depths:
-    engine = VQA_myQLM(n_qubits=2, seed=42)
+    engine = VQA_myQLM(n_qubits=2, shots=0, seed=42)
     vqe = VQE(hamiltonian="H2", n_layers=depth)
     results = engine.run(vqe)
     results_by_depth[depth] = results.energy
 
 print("Energy vs Circuit Depth:")
 for depth, energy in results_by_depth.items():
-    print(f"  Depth {depth}: {energy:.8f} Ha")
+    print(f"  Depth {depth}: {energy:.8f}")
 ```
 
 ## Understanding Results
@@ -170,68 +170,85 @@ for depth, energy in results_by_depth.items():
 The `VQAResults` object contains:
 
 ```
+======================================================================
 VQA OPTIMIZATION RESULTS
-===============================================================
-Status                       : ✓ Success
-Ground-State Energy (Ha)     : -1.1361285395 Ha
-Optimal Parameters           : {'θ_RY_0_0': 4.213, ...}
+======================================================================
+Status                       : ✓ Completed
+Objective Value (energy)     : -0.5000000000
+Optimal Parameters           : {'θ_RY_0_0': 1.5707953973406406, ...}
 Number of Qubits             : 2
-Circuit Depth               : 16
+Circuit Depth                : 9
 Optimizer                    : cobyla
-Function Evaluations        : 45
-Converged                    : True
-Barren Plateau Detected     : False
-Execution Time (s)          : 2.34
-Backend Used                : qat.simulators.qubit
-===============================================================
+Function Evaluations         : 197
+Optimizer Converged          : True
+Barren Plateau Check         : Not assessed
+Shots                        : 0 (exact expectation)
+Execution Time (s)           : 2.28
+Backend Used                 : myQLM qat.clinalg.qpu.CLinalg
+======================================================================
 ```
 
 **Key Metrics:**
-- **Energy**: Ground state energy (VQE) or objective value (QAOA)
-- **Convergence**: Did optimizer find stationary point?
-- **Barren Plateau**: Does parameter landscape have flat regions?
-- **Evaluations**: Number of times objective was computed
+- **Objective Value**: VQE energy in model units; for QAOA, minus the expected cut
+- **Optimizer Converged**: the optimizer's own success flag; `False` usually means `max_iterations` ran out. "Not reported" for Adam, which runs a fixed number of steps
+- **Function Evaluations**: objective evaluations performed; every value is in `results.intermediate_energies`
+- **Circuit Depth**: depth of the circuit actually executed ("Not measured" on the PennyLane path)
+- **Barren Plateau Check**: not implemented yet, always "Not assessed"
+- **Shots**: 0 means exact expectation values; otherwise energies are sampled estimates
+- **Backend Used**: the simulator that executed the job
 - **Time**: Wall-clock execution time
 
 ## VQE Deep Dive
 
 ### Supported Hamiltonians
 
-**H2 (Hydrogen Molecule)**
-- Qubits: 2+
-- Ground State: -1.174 Ha
-- Use: Testing, benchmarking
+Both built-in models are small illustrative Hamiltonians named after molecules.
+They have no geometry, basis set or qubit mapping behind them, so energies are
+in model units, not Hartree.
 
-**LiH (Lithium Hydride)**
-- Qubits: 4+
-- Ground State: -7.88 Ha
-- Use: Chemistry problems
+**H2-labelled model**
+- Qubits: exactly 2
+- H = 0.5 I + 0.5 Z0 + 0.5 Z1 + 0.25 X0X1 + 0.25 Y0Y1
+- Exact eigenvalues: -0.5, 0, 1, 1.5 (minimum -0.5)
+- Use: first experiments, checking an optimizer
+
+**LiH-labelled model**
+- Qubits: exactly 4
+- 10 Pauli terms plus a constant (-0.198)
+- Exact minimum: -1.983153
+- Use: a harder landscape; optimizers can stop in a local minimum
+  (e.g. -1.498 with `ryrz` + COBYLA, seed 42)
 
 ### Supported Ansatze
 
-**RY-RZ**
-- Structure: Hadamard → (RY-RZ layers with CNOT chain)
-- Parameters: 4 × layers × qubits
+**RY-RZ** (`"ryrz"`)
+- Structure: Hadamard → (RY and RZ layers with a CNOT ring)
+- Parameters: 2 × layers × qubits
 - Best for: General purpose
 
-**Linear**
-- Structure: Hadamard → (RX with CNOT chain)
+**Linear** (`"linear"`)
+- Structure: RX layers with a CNOT chain, starting from |0…0⟩
 - Parameters: 1 × layers × qubits
 - Best for: Shallow circuits, fast execution
 
-**UCCSD**
-- Structure: Hartree-Fock reference + UCC gates
-- Parameters: ~qubits
-- Best for: Chemical accuracy
+**UCCSD** (`"uccsd"`)
+- Structure: X on the first half of the qubits, then RY + CNOT per qubit
+- Parameters: number of qubits
+- Note: illustrative only; not a fermionic UCCSD, and it does not reach the
+  H2-model minimum
+
+Qiskit circuits (`"RealAmplitudes"`, `"EfficientSU2"`, `"TwoLocal"`) and PennyLane
+template names (`"StronglyEntanglingLayers"`, `"BasicEntanglerLayers"`,
+`"RandomLayers"`) are also accepted; see `openvqa.options.AVAILABLE_OPTIONS`.
 
 ### Optimizer Selection
 
 | Optimizer | Pros | Cons | Best for |
 |-----------|------|------|----------|
-| COBYLA | Robust, gradient-free | Slower | General, first try |
-| Nelder-Mead | Simplex-based | Slow convergence | Small problems |
-| BFGS | Fast convergence | Needs gradient | Medium problems |
-| SLSQP | Constrained | Complex | Advanced users |
+| COBYLA | Robust, gradient-free, copes with `shots > 0` | Slower | General, first try |
+| Nelder-Mead | Simplex-based | Needs many iterations | Small problems |
+| BFGS | Fast convergence with `shots=0` | Numerical gradients stall on sampling noise | Exact simulations |
+| Adam | Adaptive steps | Runs on PennyLane only, with `ryrz` or a PennyLane template; fixed number of steps | Gradient-based training experiments |
 
 ## QAOA Deep Dive
 
@@ -287,7 +304,7 @@ pip install myqlm myqlm-interop
 ### Q: Results look wrong or are NaN
 
 **Check:**
-1. Correct Hamiltonian? H2 needs 2+ qubits
+1. Correct Hamiltonian? H2 needs exactly 2 qubits, LiH exactly 4
 2. Backend installed? Run: `python -c "from qat.qpus import get_default_qpu; print(get_default_qpu())"`
 3. Parameters passed? Use `verbose=True` to see details
 
@@ -297,6 +314,7 @@ pip install myqlm myqlm-interop
 
 ```python
 from qat.core import Observable, Term
+from openvqa import VQA_myQLM
 from openvqa.algorithms import VQE
 
 class CustomVQE(VQE):
@@ -320,6 +338,7 @@ results = engine.run(vqe)
 ```python
 from qiskit import QuantumCircuit
 from qiskit.circuit import Parameter
+from openvqa import VQA_myQLM
 from openvqa.algorithms import VQE
 
 class CustomVQE(VQE):
@@ -346,7 +365,7 @@ results = engine.run(vqe)
 
 ## Performance Tips
 
-1. **Use seed for reproducibility** - Same seed = same results
+1. **Use seed for reproducibility** - Same seed = same results with `shots=0` (sampling with `shots > 0` is not seeded)
 2. **Start with p=1 for QAOA** - Then increase if needed
 3. **Use COBYLA first** - Most robust optimizer
 4. **Reduce iterations if testing** - Use `max_iterations=20` for quick tests

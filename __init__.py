@@ -7,8 +7,8 @@ Algorithms (VQA) including VQE and QAOA on multiple quantum backends.
 
 Features:
     - Unified interface for VQA algorithms (VQE, QAOA)
-    - Support for multiple backends (QLM, Qiskit, etc.)
-    - Pre-built ansatze and Hamiltonians
+    - Two backends: the myQLM simulator and PennyLane default.qubit
+    - Pre-built ansatze and illustrative Hamiltonians
     - Automatic optimization and result tracking
     - Scientific output formatting
 

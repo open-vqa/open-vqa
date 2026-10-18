@@ -28,7 +28,8 @@ class VQE:
     Computes the ground state energy of a Hamiltonian using a variational ansatz.
     
     Parameters:
-        hamiltonian (str): Predefined Hamiltonian (e.g., "H2", "LiH") or custom matrix
+        hamiltonian (str): Built-in illustrative model "H2" (2 qubits) or "LiH" (4 qubits);
+            override build_hamiltonian() for other Hamiltonians
         ansatz (str): Ansatz circuit type (e.g., "uccsd", "ryrz", "linear", "RealAmplitudes")
         embedding (str): Embedding type for encoding data (e.g., "angle", "amplitude") - for PennyLane backends
         feature_map (str): Feature map for encoding data (e.g., "PauliFeatureMap", "ZZFeatureMap") - for Qiskit backends
@@ -109,7 +110,11 @@ class VQE:
         self.n_params = None
     
     def _build_h2_hamiltonian(self) -> Observable:
-        """Build H2 Hamiltonian (2 qubits)."""
+        """Build the H2-labelled illustrative 2-qubit model (exact minimum -0.5).
+        
+        Not a molecular Hamiltonian: there is no geometry or basis set behind it,
+        so energies are in model units, not Hartree.
+        """
         terms = [
             Term(0.5, [], []),
             Term(0.5, ["Z"], [0]),
@@ -120,7 +125,11 @@ class VQE:
         return Observable(2, pauli_terms=terms, constant_coeff=0.0)
     
     def _build_lih_hamiltonian(self) -> Observable:
-        """Build LiH Hamiltonian (4 qubits, simplified)."""
+        """Build the LiH-labelled illustrative 4-qubit model (exact minimum -1.983153).
+        
+        Not a molecular Hamiltonian: there is no geometry or basis set behind it,
+        so energies are in model units, not Hartree.
+        """
         terms = [
             Term(-0.198, [], []),
             Term(0.396, ["Z"], [0]),
@@ -200,7 +209,11 @@ class VQE:
         return qc, params
     
     def _build_ansatz_uccsd(self, n_qubits: int) -> tuple:
-        """Build simplified UCC-SD ansatz."""
+        """Build an illustrative RY/CNOT circuit named after UCCSD.
+        
+        Not a fermionic singles-and-doubles ansatz; it does not reach the
+        minimum of the H2-labelled model.
+        """
         # Simplified UCCSD for small systems
         params = [Parameter(f"t_{i}") for i in range(n_qubits)]
         self.n_params = len(params)

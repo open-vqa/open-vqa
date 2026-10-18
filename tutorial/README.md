@@ -5,13 +5,13 @@ Welcome to the OpenVQA tutorial collection! These notebooks provide hands-on, be
 ## 📚 Available Tutorials
 
 ### 1. [VQE Tutorial](vqe_tutorial.ipynb) - Variational Quantum Eigensolver
-**Learn to find ground state energies of molecular systems**
+**Learn to find the lowest energy of a small illustrative Hamiltonian**
 
 - **What you'll learn**: Basic VQE workflow, optimizer selection, ansatz configuration
 - **Difficulty**: Beginner
 - **Time**: ~15 minutes
 - **Topics covered**:
-  - H2 molecule ground state calculation
+  - Lowest energy of the H2-labelled model (exact value -0.5)
   - Comparing COBYLA, BFGS, and Adam optimizers
   - Comparing RealAmplitudes and EfficientSU2 ansätze
   - Result visualization and analysis
@@ -149,7 +149,7 @@ After completing the tutorials, try:
 
 ### For VQE:
 - Change the number of layers (`n_layers=3, 4, 5`)
-- Try LiH molecule instead of H2
+- Try the 4-qubit LiH-labelled model (`n_qubits=4`, exact minimum -1.983153)
 - Experiment with different learning rates for Adam
 - Compare convergence speed across optimizers
 
@@ -161,10 +161,10 @@ After completing the tutorials, try:
 
 ## 📊 Expected Results
 
-### VQE (H2 Molecule):
-- Ground state energy: ≈ -1.137 Ha
+### VQE (H2-labelled model):
+- Exact minimum: -0.5 (model units, not Hartree); with `shots=0`, COBYLA and BFGS reach it
 - Typical execution time: 1-10 seconds
-- Convergence: 20-100 iterations
+- Evaluations: see `results.n_evaluations` (about 100-200 for COBYLA)
 
 ### QAOA (4-node MaxCut):
 - MaxCut value: varies by graph
