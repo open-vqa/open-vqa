@@ -140,7 +140,7 @@ Main execution engine for managing quantum simulations and optimization.
 **Parameters:**
 - `n_qubits` (int): Number of qubits (2 for H2, 4 for LiH)
 - `backend` (str): `"qat.simulators.qubit"` (default, myQLM simulator) or `"pennylane"` (PennyLane `default.qubit`); any other name raises
-- `shots` (int): Measurement shots; `0` gives exact expectation values (default: 1000, applied on the myQLM path)
+- `shots` (int): Measurement shots; `0` (the default) gives exact expectation values; e.g. `1000` adds the sampling noise of real hardware (applied on the myQLM path)
 - `seed` (int): Seeds NumPy, which makes `shots=0` runs reproducible (sampling with `shots > 0` is not seeded)
 - `verbose` (bool): Enable verbose output
 - `raise_on_error` (bool): Re-raise errors from `run()` (default: True); if False, a failed `VQAResults` with `error` set is returned
@@ -325,7 +325,7 @@ python -c "from qat.qpus import get_default_qpu; print(get_default_qpu())"
 1. Check `results.convergence`: it is the optimizer's own success flag, and
    `False` usually means `max_iterations` ran out (see `results.n_evaluations`)
 2. Increase `max_iterations`
-3. Use `shots=0` while developing: sampling noise can stall BFGS and Nelder-Mead
+3. Keep `shots=0` (the default) while developing: sampling noise can stall BFGS and Nelder-Mead
 4. Change `optimizer` (try COBYLA first)
 5. Reduce `n_layers`
 6. Try different `seed` values

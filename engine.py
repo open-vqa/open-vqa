@@ -113,14 +113,15 @@ class VQA_myQLM:
         backend (str): "qat.simulators.qubit" (default myQLM simulator) or
             "pennylane" (PennyLane default.qubit); see SUPPORTED_BACKENDS
         shots (int): Number of measurement shots, 0 for exact expectation values
-            (default: 1000; applied on the myQLM path)
+            (default: 0; applied on the myQLM path). Use e.g. 1000 to add the
+            sampling noise of real hardware.
         seed (int): Random seed for reproducibility (default: None)
         verbose (bool): Enable verbose output (default: False)
         raise_on_error (bool): Re-raise errors from run() (default: True). If
             False, run() returns a failed VQAResults with the message in ``error``.
     
     Example:
-        >>> engine = VQA_myQLM(n_qubits=2, shots=1000, seed=42)
+        >>> engine = VQA_myQLM(n_qubits=2, seed=42)
         >>> from openvqa.algorithms import VQE
         >>> algorithm = VQE(hamiltonian="H2", ansatz="ryrz")
         >>> results = engine.run(algorithm)
@@ -132,7 +133,7 @@ class VQA_myQLM:
         self,
         n_qubits: int = 4,
         backend: str = "qat.simulators.qubit",
-        shots: int = 1000,
+        shots: int = 0,
         seed: Optional[int] = None,
         verbose: bool = False,
         use_pennylane_via_qlm: bool = False,
