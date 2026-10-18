@@ -128,7 +128,7 @@ openvqa/
 ├── interop/
 │   └── pennylane_to_qlm.py  # Qiskit versions of PennyLane templates
 ├── mathematical_tools/   # Adam optimizer, optimizer names
-├── examples/             # Interactive demo notebooks
+├── examples/             # Demo notebooks (one settings cell)
 └── tutorial/             # Tutorial notebooks
 ```
 

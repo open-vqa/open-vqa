@@ -64,17 +64,13 @@ optimizer's own success flag. For example, VQE on the 2-qubit H2 model with
 `ryrz` and `shots=0` needed 197 COBYLA evaluations, while Nelder-Mead was still
 at +0.06 after 100 iterations and reached -0.5 within 400.
 
-## Interactive Notebook Selection
+## Choosing the Optimizer in the Demo Notebooks
 
-In both `vqe_demo.ipynb` and `qaoa_demo.ipynb`:
+In `examples/vqe_demo.ipynb` and `examples/qaoa_demo.ipynb`, set it in the
+**Settings** cell:
 
-```
-Select optimizer:
-  1) COBYLA (default)
-  2) Nelder-Mead
-  3) BFGS
-  4) Adam
-Enter 1/2/3/4 (default 1):
+```python
+OPTIMIZER = "cobyla"   # or "nelder-mead", "bfgs", "adam"
 ```
 
 ## Troubleshooting

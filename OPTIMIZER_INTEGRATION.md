@@ -41,8 +41,8 @@ openvqa/
 │   ├── vqe.py                           # Updated with optimizer support
 │   └── qaoa.py                          # Updated with optimizer support
 └── examples/
-    ├── vqe_demo.ipynb                   # Updated with optimizer selection
-    └── qaoa_demo.ipynb                  # Updated with optimizer selection
+    ├── vqe_demo.ipynb                   # Settings cell includes the optimizer
+    └── qaoa_demo.ipynb                  # Settings cell includes the optimizer
 ```
 
 ## Usage Examples
@@ -136,23 +136,12 @@ results = engine.run(qaoa_cobyla)
 print(f"Expected cut value: {-results.energy:.6f}")  # energy = -cut
 ```
 
-## Interactive Notebook Features
+## Notebook Settings
 
-Both `vqe_demo.ipynb` and `qaoa_demo.ipynb` now include:
-
-1. **Interactive Optimizer Selection**: Choose from 4 optimizers at runtime
-2. **Optimizer-Specific Options**: Configure learning rate for Adam
-3. **Clear Documentation**: Each optimizer includes a description
-4. **Validation**: Automatic validation of optimizer choices
-
-### Notebook Workflow
-
-1. **Backend Selection**: myQLM (default); the menu's Qiskit simulator option is not implemented yet and raises an error
-2. **Template Selection**: Choose feature maps and ansatz
-3. **Optimizer Selection**: Choose from COBYLA, Nelder-Mead, BFGS, or Adam
-4. **Configuration**: Set optimizer-specific parameters (e.g., learning rate)
-5. **Execution**: Run VQE/QAOA with selected configuration
-6. **Visualization**: View convergence plots and results
+Both `examples/vqe_demo.ipynb` and `examples/qaoa_demo.ipynb` start with a
+**Settings** cell: set `OPTIMIZER` to `"cobyla"`, `"nelder-mead"`, `"bfgs"` or
+`"adam"` (along with the backend, shots and other options), then run all
+cells. Each demo plots the objective value of every evaluation.
 
 ## API Changes
 
@@ -222,7 +211,7 @@ The new `openvqa` package enhances the optimizer support from the original repos
 ### New openvqa Package
 - Simplified standalone implementations
 - High-level API integration
-- Interactive notebook support
+- Notebook support
 - Validation and error handling
 - Optimizer-specific options
 

@@ -1,259 +1,54 @@
-# OpenVQA Tutorials
+# OpenVQA notebooks
 
-Welcome to the OpenVQA tutorial collection! These notebooks provide hands-on, beginner-friendly examples to help you get started with quantum variational algorithms.
+Two tutorials to learn with, and two demos to experiment with. Every notebook
+runs from top to bottom in about a minute or less, and compares its results
+with an answer you can check yourself.
 
-## 📚 Available Tutorials
+## Setup (once)
 
-### 1. [VQE Tutorial](vqe_tutorial.ipynb) - Variational Quantum Eigensolver
-**Learn to find the lowest energy of a small illustrative Hamiltonian**
+From the repository root, with Python 3.10, 3.11 or 3.12:
 
-- **What you'll learn**: Basic VQE workflow, optimizer selection, ansatz configuration
-- **Difficulty**: Beginner
-- **Time**: ~15 minutes
-- **Topics covered**:
-  - Lowest energy of the H2-labelled model (exact value -0.5)
-  - Comparing COBYLA, BFGS, and Adam optimizers
-  - Comparing RealAmplitudes and EfficientSU2 ansätze
-  - Result visualization and analysis
-  - Comparing with exact solutions
-
-**Key Examples**:
-```python
-from openvqa import VQA_myQLM
-from openvqa.algorithms import VQE
-
-engine = VQA_myQLM(n_qubits=2)
-vqe = VQE(hamiltonian="H2", ansatz="RealAmplitudes", optimizer="cobyla")
-results = engine.run(vqe)
-```
-
-### 1b. [VQE Tutorial (Fixed Configuration)](vqe_fixed_tutorial.ipynb)
-**Non-interactive notebook with a single backend + feature map + ansatz**
-
-- **What you'll learn**: How to run VQE end-to-end without `input()` prompts
-- **Best for**: scripting, CI runs, and copy/paste into `.py` scripts
-
-### 2. [QAOA Tutorial](qaoa_tutorial.ipynb) - Quantum Approximate Optimization Algorithm
-**Learn to solve combinatorial optimization problems**
-
-- **What you'll learn**: QAOA basics, MaxCut problem, parameter tuning
-- **Difficulty**: Beginner
-- **Time**: ~15 minutes
-- **Topics covered**:
-  - MaxCut problem on 4-node graphs
-  - QAOA depth (p) parameter effects
-  - Optimizer comparison (COBYLA, BFGS, Nelder-Mead)
-  - Performance analysis and visualization
-  - Circuit depth vs. solution quality trade-offs
-
-**Key Examples**:
-```python
-from openvqa import VQA_myQLM
-from openvqa.algorithms import QAOA
-
-engine = VQA_myQLM(n_qubits=4)
-qaoa = QAOA(problem="maxcut", graph_size=4, optimizer="bfgs", p=2)
-results = engine.run(qaoa)
-```
-
-### 2b. [QAOA Tutorial (Fixed Configuration)](qaoa_fixed_tutorial.ipynb)
-**Non-interactive notebook with a single backend and fixed settings**
-
-- **What you'll learn**: Standard MaxCut QAOA run without prompts
-- **Best for**: scripting, CI runs, and quick smoke tests
-
-### 3. [QLM Backend (Quick Start)](qlm_backend_simplified.ipynb)
-**See how to use Qiskit circuits, convert to QLM, and run VQE in one short flow**
-
-- **What you'll learn**: Why QLM is the primary execution path here and how to convert/run a Qiskit ansatz via QLM
-- **Difficulty**: Beginner
-- **Time**: ~5 minutes
-
-## 🚀 Getting Started
-
-### Prerequisites
-
-Install OpenVQA from the repository root (see the main README):
 ```bash
 python -m pip install -r requirements.txt
-```
-Use Python 3.10, 3.11 or 3.12 (myQLM has no builds for 3.13+).
-
-### Running the Tutorials
-
-1. **Open Jupyter Notebook/Lab**:
-   ```bash
-   jupyter notebook
-   ```
-   
-2. **Navigate to the tutorial folder**:
-   - Click on `tutorial/`
-   - Open either `vqe_tutorial.ipynb` or `qaoa_tutorial.ipynb`
-
-3. **Run cells sequentially**:
-   - Use `Shift + Enter` to run each cell
-   - Follow along with the explanations
-   - Experiment with parameters!
-
-### Quick Test
-
-Run this in a Python environment to verify your setup:
-```python
-from openvqa import VQA_myQLM
-from openvqa.algorithms import VQE, QAOA
-print("✓ OpenVQA is ready!")
+jupyter lab
 ```
 
-## 📖 Tutorial Structure
+In Jupyter, use the kernel of the same Python you installed with.
 
-Each tutorial follows this pattern:
+## Tutorials: start here
 
-1. **Introduction** - What the algorithm does and why it's useful
-2. **Setup** - Import libraries and initialize the engine
-3. **Examples** - Multiple practical examples with different configurations
-4. **Comparison** - Visual comparison of results
-5. **Summary** - Key takeaways and next steps
+| Notebook | What you do | Answer to compare with |
+|----------|-------------|------------------------|
+| [vqe_tutorial.ipynb](vqe_tutorial.ipynb) | Find the lowest energy of a 2-qubit model, watch the optimizer, compare optimizers, add measurement noise | −0.5, computed exactly in the notebook |
+| [qaoa_tutorial.ipynb](qaoa_tutorial.ipynb) | Solve MaxCut on a triangle, see which splits QAOA picks, compare 1 and 2 layers on a square | Maximum cut 2 (triangle) and 4 (square), found by checking every split |
 
-## 🎯 Learning Path
+Recommended order: VQE first, then QAOA.
 
-**Recommended order for beginners**:
+## Demos: experiment
 
-1. **Start with VQE Tutorial** → Understand the basics of variational quantum algorithms
-2. **Then QAOA Tutorial** → Apply concepts to optimization problems
-3. **Explore Interactive Demos** → Try [vqe_demo.ipynb](../examples/vqe_demo.ipynb) and [qaoa_demo.ipynb](../examples/qaoa_demo.ipynb) for advanced features
+| Notebook | What you can change |
+|----------|---------------------|
+| [vqe_demo.ipynb](../examples/vqe_demo.ipynb) | Backend, Hamiltonian (`"H2"` or `"LiH"`), ansatz, optimizer, shots, all in one settings cell |
+| [qaoa_demo.ipynb](../examples/qaoa_demo.ipynb) | Graph size and random seed, QAOA layers `p`, optimizer, backend, shots; compared with the brute-force best cut |
 
-## 💡 Key Concepts
+## Expected results (with `shots=0`)
 
-### What is a Variational Quantum Algorithm?
+- **VQE tutorial:** energy −0.5. COBYLA and BFGS report convergence; Nelder-Mead
+  reaches −0.499995 within its budget.
+- **QAOA tutorial:** expected cut 2.0 on the triangle, with probability 1/6 on each
+  of the six best splits. On the square: 3.0 with `p=1`, 4.0 with `p=2`.
+- With `shots > 0` the numbers change from run to run; the tutorials explain why.
 
-Variational quantum algorithms are hybrid quantum-classical algorithms that:
-- Use parametrized quantum circuits (ansätze)
-- Optimize parameters using classical optimizers
-- Find approximate solutions to complex problems
+## Troubleshooting
 
-### Supported Optimizers
+- **`ModuleNotFoundError: No module named 'openvqa'`**: the notebook kernel is a
+  different Python from the one you installed with. Select the right kernel, or
+  run the install command with the kernel's Python.
+- **Installation fails on Python 3.13 or newer**: myQLM has no builds for it yet.
+  Use Python 3.12 (or 3.10/3.11).
 
-| Optimizer | Type | Best For |
-|-----------|------|----------|
-| **COBYLA** | Gradient-free | General purpose, robust |
-| **Nelder-Mead** | Simplex | Smooth landscapes |
-| **BFGS** | Quasi-Newton | Fast convergence with gradients |
-| **Adam** | Adaptive | Large-scale, noisy problems |
+## More
 
-See [OPTIMIZER_QUICKREF.md](../OPTIMIZER_QUICKREF.md) for details.
-
-## 🔬 Experiment Ideas
-
-After completing the tutorials, try:
-
-### For VQE:
-- Change the number of layers (`n_layers=3, 4, 5`)
-- Try the 4-qubit LiH-labelled model (`n_qubits=4`, exact minimum -1.983153)
-- Experiment with different learning rates for Adam
-- Compare convergence speed across optimizers
-
-### For QAOA:
-- Increase QAOA depth (`p=3, 4, 5`)
-- Try larger graphs (`graph_size=6, 8`)
-- Test with different random seeds
-- Analyze how p affects solution quality
-
-## 📊 Expected Results
-
-### VQE (H2-labelled model):
-- Exact minimum: -0.5 (model units, not Hartree); with `shots=0`, COBYLA and BFGS reach it
-- Typical execution time: 1-10 seconds
-- Evaluations: see `results.n_evaluations` (about 100-200 for COBYLA)
-
-### QAOA (4-node MaxCut):
-- MaxCut value: varies by graph
-- Typical execution time: 1-10 seconds
-- Better results with higher p
-
-## 🐛 Troubleshooting
-
-**Issue**: Import errors
-```
-Solution: Install OpenVQA with the same Python as the notebook kernel
-(from the repository root)
-python -m pip install -r requirements.txt
-```
-
-**Issue**: Slow execution
-```
-Solution: Reduce max_iterations or use a simpler ansatz
-vqe = VQE(max_iterations=20, n_layers=1)
-```
-
-**Issue**: Poor convergence
-```
-Solution: Try a different optimizer or increase iterations
-vqe = VQE(optimizer="bfgs", max_iterations=200)
-```
-
-## 📚 Additional Resources
-
-### Documentation
-- [OpenVQA Main README](../README.md)
+- [Main README](../README.md): installation, API, supported Hamiltonians and ansätze
 - [Getting Started Guide](../GETTING_STARTED.md)
 - [Optimizer Quick Reference](../OPTIMIZER_QUICKREF.md)
-
-### Interactive Demos
-- [VQE Interactive Demo](../examples/vqe_demo.ipynb) - Full-featured with all options
-- [QAOA Interactive Demo](../examples/qaoa_demo.ipynb) - Comprehensive QAOA examples
-
-### External Learning
-- [Qiskit Textbook - VQE](https://qiskit.org/textbook/ch-applications/vqe-molecules.html)
-- [Pennylane Tutorials](https://pennylane.ai/qml/demos_quantum-computing.html)
-- [QAOA Paper](https://arxiv.org/abs/1411.4028) - Original Farhi et al. paper
-
-## 🤝 Contributing
-
-Have ideas for new tutorials? Found an issue? Contributions are welcome!
-
-1. Create a new tutorial notebook following the existing format
-2. Add it to this README
-3. Submit a pull request
-
-## 📝 Tutorial Checklist
-
-When creating new tutorials:
-
-- [ ] Clear title and introduction
-- [ ] Prerequisites listed
-- [ ] Step-by-step explanations
-- [ ] Multiple working examples
-- [ ] Visualization of results
-- [ ] Summary with key takeaways
-- [ ] Links to related resources
-- [ ] Tested and runs without errors
-
-## 🎓 Next Steps
-
-After mastering these tutorials:
-
-1. **Explore Advanced Topics**:
-   - Custom Hamiltonians
-   - Hardware noise simulation
-   - Error mitigation techniques
-
-2. **Real Applications**:
-   - Molecular chemistry calculations
-   - Portfolio optimization
-   - Network design problems
-
-3. **Contribute**:
-   - Share your own examples
-   - Help improve documentation
-   - Report issues or suggestions
-
----
-
-## 📞 Support
-
-Need help? Check out:
-- [GitHub Issues](../../issues)
-- [Documentation](../README.md)
-- [Examples folder](../examples/)
-
-Happy learning! 🚀🔬
