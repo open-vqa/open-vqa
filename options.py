@@ -11,7 +11,7 @@ from typing import Any, Dict
 
 from openvqa.algorithms.vqe import VQE
 from openvqa.algorithms.qaoa import QAOA
-from openvqa.interop.pennylane_to_qlm import available_templates
+from openvqa.interop.pennylane_to_qlm import available_templates, available_embeddings
 
 
 AVAILABLE_OPTIONS: Dict[str, Any] = {
@@ -23,6 +23,7 @@ AVAILABLE_OPTIONS: Dict[str, Any] = {
             "qiskit_templates": list(VQE.SUPPORTED_ANSATZ_QISKIT),
             "pennylane_templates_via_qlm": list(available_templates()),
         },
+        "embeddings": list(available_embeddings()),
     },
     "qaoa": {
         "optimizers": list(QAOA.SUPPORTED_OPTIMIZERS),

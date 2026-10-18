@@ -18,12 +18,21 @@ import numpy as np
 
 
 def available_templates() -> List[str]:
+    """PennyLane-style templates usable as a trainable ansatz."""
     return [
         "StronglyEntanglingLayers",
         "BasicEntanglerLayers",
         "RandomLayers",
+    ]
+
+
+def available_embeddings() -> List[str]:
+    """PennyLane-style embeddings (data encoding, not a trainable ansatz)."""
+    return [
         "AngleEmbedding",
         "AmplitudeEmbedding",
+        "BasisEmbedding",
+        "DisplacementEmbedding",
     ]
 
 
@@ -129,17 +138,11 @@ def template_to_qiskit(name: str, n_qubits: int, n_layers: int = 1) -> Tuple[Qua
     if key == "displacementembedding":
         return displacement_embedding_qiskit(n_qubits)
 
-    # Default fallback: simple ry-rz layers similar to RYRZ
-    qc = QuantumCircuit(n_qubits)
-    n_params = 2 * n_qubits * n_layers
-    for layer in range(n_layers):
-        for q in range(n_qubits):
-            qc.ry(0.0, q)
-        for q in range(n_qubits):
-            qc.rz(0.0, q)
-        for q in range(n_qubits - 1):
-            qc.cx(q, q + 1)
-    return qc, n_params
+    # No silent fallback: an unknown name must not become a circuit without parameters
+    raise ValueError(
+        f"Unknown PennyLane template {name!r}. "
+        f"Choose from: {available_templates() + available_embeddings()}"
+    )
 
 
 def build_vqe_circuit_qiskit(embedding_name: str, ansatz_name: str, n_qubits: int, n_layers: int = 1) -> Tuple[QuantumCircuit, int]:

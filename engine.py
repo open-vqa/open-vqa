@@ -69,9 +69,9 @@ class VQA_myQLM:
         verbose (bool): Enable verbose output (default: False)
     
     Example:
-        >>> engine = VQA_myQLM(n_qubits=4, shots=1000, seed=42)
+        >>> engine = VQA_myQLM(n_qubits=2, shots=1000, seed=42)
         >>> from openvqa.algorithms import VQE
-        >>> algorithm = VQE(hamiltonian="H2", ansatz="uccsd")
+        >>> algorithm = VQE(hamiltonian="H2", ansatz="ryrz")
         >>> results = engine.run(algorithm)
     """
     

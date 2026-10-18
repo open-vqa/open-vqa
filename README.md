@@ -177,8 +177,8 @@ Stores and formats optimization results.
 
 | Hamiltonian | Qubits | Description | Ground State |
 |-------------|--------|-------------|--------------|
-| **H2** | 2+ | Hydrogen molecule | ≈ -1.174 Ha |
-| **LiH** | 4+ | Lithium hydride (simplified) | ≈ -7.88 Ha |
+| **H2** | 2 | Hydrogen molecule | ≈ -1.174 Ha |
+| **LiH** | 4 | Lithium hydride (simplified) | ≈ -7.88 Ha |
 
 *Extensible*: Add custom Hamiltonians by extending the VQE class.
 

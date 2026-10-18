@@ -16,8 +16,8 @@ Example:
     >>> from openvqa import VQA_myQLM
     >>> from openvqa.algorithms import VQE
     >>> 
-    >>> engine = VQA_myQLM(n_qubits=4, shots=1000)
-    >>> algorithm = VQE(hamiltonian="H2", ansatz="uccsd", optimizer="cobyla")
+    >>> engine = VQA_myQLM(n_qubits=2, shots=1000)
+    >>> algorithm = VQE(hamiltonian="H2", ansatz="ryrz", optimizer="cobyla")
     >>> results = engine.run(algorithm)
     >>> print(f"Ground state energy: {results.energy:.10f}")
 """

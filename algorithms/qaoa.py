@@ -209,7 +209,8 @@ class QAOA:
             self.n_params = len(params)
         elif self.ansatz.lower() == "twolocal":
             from qiskit.circuit.library import TwoLocal
-            qc = TwoLocal(n_qubits, reps=self.p)
+            # Without explicit blocks TwoLocal is an empty circuit with no parameters
+            qc = TwoLocal(n_qubits, "ry", "cx", reps=self.p)
             params = list(qc.parameters)
             self.n_params = len(params)
         else:
@@ -221,13 +222,11 @@ class QAOA:
                 else:
                     from openvqa.interop.pennylane_to_qlm import template_to_qiskit
                     qc, params = template_to_qiskit(self.ansatz, n_qubits, self.p)
-                # Convert back to Parameter objects for consistency
-                from qiskit.circuit import Parameter
-                param_list = [Parameter(f"p_{i}") for i in range(params)]
-                self.n_params = params
-                params = param_list
-            except Exception:
-                raise ValueError(f"Unknown ansatz: {self.ansatz}")
+                # Count the parameters actually in the circuit (embeddings use fixed angles)
+                params = list(qc.parameters)
+                self.n_params = len(params)
+            except ValueError as exc:
+                raise ValueError(f"Unknown ansatz: {self.ansatz}") from exc
         
         # Compose with feature map if specified
         if self.feature_map:
@@ -242,6 +241,9 @@ class QAOA:
             qc = combined
             params = list(qc.parameters)
             self.n_params = len(params)
+        
+        if self.n_params == 0:
+            raise ValueError(f"Ansatz {self.ansatz!r} produced a circuit with no trainable parameters.")
         
         return qc, params
     
@@ -370,7 +372,14 @@ class QAOA:
             results.circuit_depth = len(qc)
             return results
 
-        # Default: run local PennyLane QNode minimization as previous implementation
+        # Default: run local PennyLane QNode minimization as previous implementation.
+        # It builds the standard QAOA circuit only, so refuse settings it would ignore.
+        if self.ansatz is not None or self.feature_map is not None:
+            raise ValueError(
+                "The PennyLane path (backend='pennylane' or optimizer='adam') runs the standard "
+                "QAOA circuit only; ansatz and feature_map are not supported there."
+            )
+        
         # build pennylane Hamiltonian
         # Same convention as _build_maxcut_observable: H = -C
         coeffs = []

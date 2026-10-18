@@ -16,7 +16,7 @@ from scipy.optimize import minimize
 from qat.core import Observable, Term
 from qat.interop.qiskit import qiskit_to_qlm
 from openvqa.engine import VQAResults
-from openvqa.interop.pennylane_to_qlm import template_to_qiskit, build_vqe_circuit_qiskit
+from openvqa.interop.pennylane_to_qlm import template_to_qiskit, build_vqe_circuit_qiskit, available_templates, available_embeddings
 from openvqa.mathematical_tools import ScipyMinimizePluginMethod
 from openvqa.mathematical_tools.adam_optimizer import AdamOptimizer
 
@@ -52,7 +52,8 @@ class VQE:
         - "cobyla": Constrained Optimization BY Linear Approximation (default)
         - "nelder-mead": Nelder-Mead simplex algorithm
         - "bfgs": Broyden–Fletcher–Goldfarb–Shanno algorithm
-        - "adam": Adaptive Moment Estimation (gradient-based)
+        - "adam": Adaptive Moment Estimation (gradient-based); currently runs on the
+          PennyLane simulator, so the ansatz must be in SUPPORTED_ANSATZ_PENNYLANE
     """
 
     # Public, discoverable option lists (intended for notebooks / quick inspection)
@@ -60,6 +61,8 @@ class VQE:
     SUPPORTED_FEATURE_MAPS = ("PauliFeatureMap", "ZZFeatureMap", "ZFeatureMap")
     SUPPORTED_ANSATZ_INTERNAL = ("ryrz", "linear", "uccsd")
     SUPPORTED_ANSATZ_QISKIT = ("RealAmplitudes", "EfficientSU2", "TwoLocal")
+    # Ansatze the PennyLane path (backend="pennylane" or optimizer="adam") can build
+    SUPPORTED_ANSATZ_PENNYLANE = ("ryrz", "StronglyEntanglingLayers", "BasicEntanglerLayers", "RandomLayers")
     
     def __init__(
         self,
@@ -85,6 +88,20 @@ class VQE:
         if self.optimizer_name not in self.SUPPORTED_OPTIMIZERS:
             raise ValueError(
                 f"Optimizer '{optimizer}' not supported. Choose from: {list(self.SUPPORTED_OPTIMIZERS)}"
+            )
+        
+        # Validate ansatz choice: an unknown name must not silently become another circuit
+        known_ansatz = self.SUPPORTED_ANSATZ_INTERNAL + self.SUPPORTED_ANSATZ_QISKIT + tuple(available_templates())
+        ansatz_key = ansatz.lower() if isinstance(ansatz, str) else None
+        if ansatz_key not in [a.lower() for a in known_ansatz]:
+            hint = ""
+            if ansatz_key in [e.lower() for e in available_embeddings()]:
+                hint = " It is an embedding; pass it as embedding=... instead."
+            raise ValueError(f"Ansatz {ansatz!r} not supported.{hint} Choose from: {list(known_ansatz)}")
+        if self.optimizer_name == "adam" and ansatz_key not in [a.lower() for a in self.SUPPORTED_ANSATZ_PENNYLANE]:
+            raise ValueError(
+                f"optimizer='adam' currently runs on the PennyLane simulator, which supports "
+                f"ansatz in {list(self.SUPPORTED_ANSATZ_PENNYLANE)}; got {ansatz!r}."
             )
         
         self.hamiltonian = None
@@ -156,7 +173,7 @@ class VQE:
         return qc, params
     
     def _build_ansatz_linear(self, n_qubits: int, n_layers: int) -> tuple:
-        """Build linear parametric ansatz (RX-RZ)."""
+        """Build linear parametric ansatz (RX layers with a CNOT chain)."""
         params = []
         for layer in range(n_layers):
             for qubit in range(n_qubits):
@@ -166,9 +183,8 @@ class VQE:
         
         qc = QuantumCircuit(n_qubits)
         
-        # Initial superposition
-        for q in range(n_qubits):
-            qc.h(q)
+        # No initial Hadamard layer: RX acting on |+> only adds a phase,
+        # which would leave every parameter without effect
         
         # Parametric layers
         param_idx = 0
@@ -236,25 +252,19 @@ class VQE:
             self.n_params = len(params)
         elif self.ansatz_name.lower() == "twolocal":
             from qiskit.circuit.library import TwoLocal
-            qc = TwoLocal(n_qubits, reps=self.n_layers)
+            # Without explicit blocks TwoLocal is an empty circuit with no parameters
+            qc = TwoLocal(n_qubits, "ry", "cx", reps=self.n_layers)
             params = list(qc.parameters)
             self.n_params = len(params)
         else:
-            # Try treating it as a PennyLane template name (for Pennylane->QLM path)
-            # Will be handled by template_to_qiskit in execute_pennylane_via_qlm
-            from openvqa.interop.pennylane_to_qlm import build_vqe_circuit_qiskit
-            try:
-                if self.embedding_name:
-                    qc, params = build_vqe_circuit_qiskit(self.embedding_name, self.ansatz_name, n_qubits, self.n_layers)
-                else:
-                    qc, params = template_to_qiskit(self.ansatz_name, n_qubits, self.n_layers)
-                # Convert back to Parameter objects for consistency
-                from qiskit.circuit import Parameter
-                param_list = [Parameter(f"p_{i}") for i in range(params)]
-                self.n_params = params
-                params = param_list
-            except Exception:
-                raise ValueError(f"Unknown ansatz: {self.ansatz_name}")
+            # PennyLane-style template name (validated in __init__), built as a Qiskit circuit
+            if self.embedding_name:
+                qc, _ = build_vqe_circuit_qiskit(self.embedding_name, self.ansatz_name, n_qubits, self.n_layers)
+            else:
+                qc, _ = template_to_qiskit(self.ansatz_name, n_qubits, self.n_layers)
+            # Count the parameters actually in the circuit (embeddings use fixed angles)
+            params = list(qc.parameters)
+            self.n_params = len(params)
         
         # Compose with feature map if specified
         if self.feature_map_name:
@@ -263,17 +273,24 @@ class VQE:
             params = list(qc.parameters)
             self.n_params = len(params)
         
+        if self.n_params == 0:
+            raise ValueError(f"Ansatz {self.ansatz_name!r} produced a circuit with no trainable parameters.")
+        
         return qc, params
     
     def build_hamiltonian(self, n_qubits: int) -> Observable:
         """Build the target Hamiltonian."""
         if self.hamiltonian_name.lower() == "h2":
-            if n_qubits < 2:
-                raise ValueError("H2 Hamiltonian requires at least 2 qubits")
+            if n_qubits != 2:
+                raise ValueError(
+                    f"The H2 model uses exactly 2 qubits; got n_qubits={n_qubits}. Use VQA_myQLM(n_qubits=2)."
+                )
             return self._build_h2_hamiltonian()
         elif self.hamiltonian_name.lower() == "lih":
-            if n_qubits < 4:
-                raise ValueError("LiH Hamiltonian requires at least 4 qubits")
+            if n_qubits != 4:
+                raise ValueError(
+                    f"The LiH model uses exactly 4 qubits; got n_qubits={n_qubits}. Use VQA_myQLM(n_qubits=4)."
+                )
             return self._build_lih_hamiltonian()
         else:
             raise ValueError(f"Unknown Hamiltonian: {self.hamiltonian_name}")
@@ -302,8 +319,9 @@ class VQE:
         results.circuit_depth = len(ansatz_circ)
         results.n_evaluations = 0
         
-        # Convert to QLM
-        ansatz_circ = ansatz_circ.decompose()
+        # Convert to QLM. Decompose fully: a single decompose() turns RY into
+        # Qiskit's R gate, which qiskit_to_qlm converts incorrectly.
+        ansatz_circ = ansatz_circ.decompose(reps=10)
         qlm_circuit = qiskit_to_qlm(ansatz_circ)
         
         # Create optimization job
@@ -340,81 +358,67 @@ class VQE:
             print(f"Building {self.hamiltonian_name} Hamiltonian (PennyLane)...")
         self.hamiltonian = self.build_hamiltonian(n_qubits)
 
-        # Convert QAT Observable to PennyLane Hamiltonian safely
+        # Convert the QAT Observable term by term. Never substitute another
+        # Hamiltonian: a failed conversion stops the run.
+        pauli_ops = {'X': qml.PauliX, 'Y': qml.PauliY, 'Z': qml.PauliZ}
         try:
-            if hasattr(self.hamiltonian, 'pauli_terms'):
-                # QAT Observable with pauli_terms attribute
-                coeffs = []
-                ops = []
-                for term in self.hamiltonian.pauli_terms:
-                    coeffs.append(term.coeff)
-                    if len(term.pauli) == 0:
-                        ops.append(qml.Identity(wires=0))
-                    else:
-                        subops = []
-                        for p, w in zip(term.pauli, term.wires):
-                            if p == 'X':
-                                subops.append(qml.PauliX(w))
-                            elif p == 'Y':
-                                subops.append(qml.PauliY(w))
-                            elif p == 'Z':
-                                subops.append(qml.PauliZ(w))
-                        if len(subops) == 1:
-                            ops.append(subops[0])
-                        else:
-                            prod = subops[0]
-                            for so in subops[1:]:
-                                prod = prod @ so
-                            ops.append(prod)
-                hamiltonian_pl = qml.Hamiltonian(coeffs, ops)
-            else:
-                # Fallback: build a simple H2 Hamiltonian in PennyLane directly
-                if engine.verbose:
-                    print("Warning: Could not extract pauli_terms, using default H2 Hamiltonian")
-                hamiltonian_pl = qml.Hamiltonian(
-                    [0.5, 0.5, 0.5, 0.25, 0.25],
-                    [qml.Identity(wires=0), qml.PauliZ(wires=0), qml.PauliZ(wires=1),
-                     qml.PauliX(wires=0) @ qml.PauliX(wires=1),
-                     qml.PauliY(wires=0) @ qml.PauliY(wires=1)]
-                )
-        except Exception as e:
-            if engine.verbose:
-                print(f"Warning: Error converting to PennyLane Hamiltonian: {e}")
-            # Use default H2 Hamiltonian
-            hamiltonian_pl = qml.Hamiltonian(
-                [0.5, 0.5, 0.5, 0.25, 0.25],
-                [qml.Identity(wires=0), qml.PauliZ(wires=0), qml.PauliZ(wires=1),
-                 qml.PauliX(wires=0) @ qml.PauliX(wires=1),
-                 qml.PauliY(wires=0) @ qml.PauliY(wires=1)]
+            # QAT folds identity terms into constant_coeff
+            coeffs = [float(self.hamiltonian.constant_coeff)]
+            ops = [qml.Identity(wires=0)]
+            for term in self.hamiltonian.terms:
+                coeffs.append(float(term.coeff))
+                if len(term.op) == 0:
+                    ops.append(qml.Identity(wires=0))
+                else:
+                    prod = pauli_ops[term.op[0]](term.qbits[0])
+                    for p, w in zip(term.op[1:], term.qbits[1:]):
+                        prod = prod @ pauli_ops[p](w)
+                    ops.append(prod)
+            hamiltonian_pl = qml.Hamiltonian(coeffs, ops)
+        except Exception as exc:
+            raise ValueError(
+                f"Could not convert Hamiltonian {self.hamiltonian_name!r} to PennyLane; "
+                "the requested problem was not executed."
+            ) from exc
+        
+        # Only ansatze in SUPPORTED_ANSATZ_PENNYLANE can be built here; anything
+        # else raises instead of silently running a different circuit.
+        ansatz_key = self.ansatz_name.lower() if isinstance(self.ansatz_name, str) else None
+        weight_shapes = {
+            'ryrz': (self.n_layers, 2 * n_qubits),
+            'stronglyentanglinglayers': (self.n_layers, n_qubits, 3),
+            'basicentanglerlayers': (self.n_layers, n_qubits),
+            'randomlayers': (self.n_layers, 3 * n_qubits),
+        }
+        if ansatz_key not in weight_shapes:
+            raise ValueError(
+                f"Ansatz {self.ansatz_name!r} is not available on the PennyLane path "
+                f"(backend='pennylane' or optimizer='adam'). Choose from: {list(self.SUPPORTED_ANSATZ_PENNYLANE)}"
             )
+        if self.embedding_name and self.embedding_name.lower() not in [e.lower() for e in available_embeddings()]:
+            raise ValueError(f"Unknown embedding {self.embedding_name!r}. Choose from: {available_embeddings()}")
+        weight_shape = weight_shapes[ansatz_key]
 
-        # Build ansatz function: accept either a pennylane template (callable) or fallback to internal builder
         def ansatz_fn(params):
-            if callable(self.ansatz_name):
-                # If ansatz_name is a template function/class
-                templates.StronglyEntanglingLayers(params, wires=list(range(n_qubits)))
-            elif isinstance(self.ansatz_name, str) and self.ansatz_name.lower() in ['stronglyentanglinglayers', 'basicentanglerlayers', 'randomlayers']:
-                # Use PennyLane templates
-                if self.ansatz_name.lower() == 'stronglyentanglinglayers':
-                    weights = np.array(params).reshape(self.n_layers, n_qubits, 3)
-                    templates.StronglyEntanglingLayers(weights, wires=list(range(n_qubits)))
-                elif self.ansatz_name.lower() == 'basicentanglerlayers':
-                    weights = np.array(params).reshape(self.n_layers, n_qubits)
-                    templates.BasicEntanglerLayers(weights, wires=list(range(n_qubits)))
-                elif self.ansatz_name.lower() == 'randomlayers':
-                    weights = np.array(params).reshape(self.n_layers, n_qubits, 3)
-                    templates.RandomLayers(weights, wires=list(range(n_qubits)))
+            weights = np.reshape(params, weight_shape)
+            if ansatz_key == 'stronglyentanglinglayers':
+                templates.StronglyEntanglingLayers(weights, wires=list(range(n_qubits)))
+            elif ansatz_key == 'basicentanglerlayers':
+                templates.BasicEntanglerLayers(weights, wires=list(range(n_qubits)))
+            elif ansatz_key == 'randomlayers':
+                templates.RandomLayers(weights, wires=list(range(n_qubits)))
             else:
-                # Fallback to RY-RZ built circuit translated to pennylane
-                n_layers = self.n_layers
-                idx = 0
-                for layer in range(n_layers):
+                # Same circuit as _build_ansatz_ryrz: Hadamards, then RY, RZ and a CNOT ring per layer
+                for q in range(n_qubits):
+                    qml.Hadamard(wires=q)
+                for layer in range(self.n_layers):
                     for q in range(n_qubits):
-                        qml.RY(params[idx], wires=q)
-                        idx += 1
+                        qml.RY(weights[layer, q], wires=q)
                     for q in range(n_qubits):
-                        qml.RZ(params[idx], wires=q)
-                        idx += 1
+                        qml.RZ(weights[layer, n_qubits + q], wires=q)
+                    for q in range(n_qubits - 1):
+                        qml.CNOT(wires=[q, q + 1])
+                    qml.CNOT(wires=[n_qubits - 1, 0])
 
         # Build embedding function
         def embedding_fn():
@@ -435,25 +439,10 @@ class VQE:
                     # For qubits, approximate with rotations
                     data = [0.5, 0.5]
                     qml.DisplacementEmbedding(data, wires=list(range(min(len(data), n_qubits))))
-                # Add more embeddings as needed
-            else:
-                # Default: Hadamard layer
-                for w in range(n_qubits):
-                    qml.Hadamard(wires=w)
+            # No embedding: the ansatz starts from |0...0> (ryrz adds its own Hadamards),
+            # matching the circuits built on the QLM path
 
-        # Estimate number of parameters
-        if callable(self.ansatz_name):
-            n_params = n_qubits * max(1, self.n_layers) * 3
-        elif isinstance(self.ansatz_name, str) and self.ansatz_name.lower() in ['stronglyentanglinglayers', 'basicentanglerlayers', 'randomlayers']:
-            # PennyLane templates parameter counts
-            if self.ansatz_name.lower() == 'stronglyentanglinglayers':
-                n_params = 3 * n_qubits * self.n_layers
-            elif self.ansatz_name.lower() == 'basicentanglerlayers':
-                n_params = n_qubits * self.n_layers
-            elif self.ansatz_name.lower() == 'randomlayers':
-                n_params = 3 * n_qubits * self.n_layers
-        else:
-            n_params = n_qubits * 2 * self.n_layers
+        n_params = int(np.prod(weight_shape))
 
         dev = qml.device('default.qubit', wires=n_qubits)
 
