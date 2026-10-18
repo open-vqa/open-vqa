@@ -15,7 +15,7 @@ from pennylane import templates
 from scipy.optimize import minimize
 from qat.core import Observable, Term
 from qat.interop.qiskit import qiskit_to_qlm
-from openvqa.engine import VQAResults
+from openvqa.engine import VQAResults, record_optimizer_metadata
 from openvqa.interop.pennylane_to_qlm import template_to_qiskit, build_vqe_circuit_qiskit, available_templates, available_embeddings
 from openvqa.mathematical_tools import ScipyMinimizePluginMethod
 from openvqa.mathematical_tools.adam_optimizer import AdamOptimizer
@@ -316,12 +316,11 @@ class VQE:
         ansatz_circ, ansatz_params = self.build_ansatz(engine.n_qubits)
         
         results.n_qubits = engine.n_qubits
-        results.circuit_depth = len(ansatz_circ)
-        results.n_evaluations = 0
         
         # Convert to QLM. Decompose fully: a single decompose() turns RY into
         # Qiskit's R gate, which qiskit_to_qlm converts incorrectly.
         ansatz_circ = ansatz_circ.decompose(reps=10)
+        results.circuit_depth = ansatz_circ.depth()  # depth of the circuit actually executed
         qlm_circuit = qiskit_to_qlm(ansatz_circ)
         
         # Create optimization job
@@ -342,8 +341,9 @@ class VQE:
         
         results.energy = result.value
         results.optimal_parameters = result.parameter_map
-        results.convergence = True
-        results.barren_plateau_detected = False
+        results.backend = engine.executor_name
+        results.shots = nbshots
+        record_optimizer_metadata(results, result)
         
         return results
 
@@ -351,6 +351,9 @@ class VQE:
         """Execute VQE using PennyLane (fallback path when backend is PennyLane)."""
         results = VQAResults()
         results.optimizer_name = self.optimizer_name
+        # default.qubit is created without shots, so expectations are exact here
+        results.backend = "PennyLane default.qubit"
+        results.shots = 0
         n_qubits = engine.n_qubits
 
         # Build Hamiltonian as pennylane observable
@@ -475,8 +478,10 @@ class VQE:
 
             results.energy = result.value
             results.optimal_parameters = result.parameter_map
-            results.convergence = True
-            results.circuit_depth = len(qc)
+            results.backend = engine.executor_name
+            results.shots = nbshots
+            record_optimizer_metadata(results, result)
+            results.circuit_depth = qc.depth()
             results.n_qubits = n_qubits
             return results
 
@@ -528,14 +533,19 @@ class VQE:
             results.n_evaluations += 1
             results.energy = float(final_energy)
             results.optimal_parameters = np.array(x, dtype=float)
-            results.convergence = True
-            results.circuit_depth = 0
+            # A fixed number of Adam steps is run; convergence is not tested
             results.n_qubits = n_qubits
             return results
 
+        # Record every evaluation, as the myQLM path does
+        def tracked_cost(p):
+            value = cost(p)
+            results.intermediate_energies.append(value)
+            return value
+
         x0 = np.zeros(n_params)
         res = minimize(
-            cost,
+            tracked_cost,
             x0,
             method=method.upper() if method in ["cobyla", "nelder-mead"] else None,
             options={"maxiter": self.max_iterations},
@@ -544,6 +554,6 @@ class VQE:
         results.energy = float(res.fun)
         results.optimal_parameters = np.array(res.x, dtype=float)
         results.convergence = bool(res.success)
-        results.circuit_depth = 0
+        results.n_evaluations = len(results.intermediate_energies)
         results.n_qubits = n_qubits
         return results

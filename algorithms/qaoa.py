@@ -12,7 +12,7 @@ from qiskit.circuit import Parameter
 import networkx as nx
 from qat.core import Observable, Term
 from qat.interop.qiskit import qiskit_to_qlm
-from openvqa.engine import VQAResults
+from openvqa.engine import VQAResults, record_optimizer_metadata
 from openvqa.mathematical_tools import ScipyMinimizePluginMethod
 from openvqa.mathematical_tools.adam_optimizer import AdamOptimizer
 import pennylane as qml
@@ -299,8 +299,6 @@ class QAOA:
         observable = self.build_observable()
         
         results.n_qubits = self.graph_size
-        results.circuit_depth = len(qaoa_circuit)
-        results.n_evaluations = 0
         
         # Convert to QLM
         # Some circuit-library constructs (e.g., feature maps) can appear as
@@ -313,6 +311,7 @@ class QAOA:
             pass
 
         qaoa_circuit = qaoa_circuit.decompose(reps=10)
+        results.circuit_depth = qaoa_circuit.depth()  # depth of the circuit actually executed
         qlm_circuit = qiskit_to_qlm(qaoa_circuit)
         
         # Create job
@@ -331,8 +330,9 @@ class QAOA:
         
         results.energy = result.value
         results.optimal_parameters = result.parameter_map
-        results.convergence = True
-        results.barren_plateau_detected = False
+        results.backend = engine.executor_name
+        results.shots = nbshots
+        record_optimizer_metadata(results, result)
         
         return results
 
@@ -340,6 +340,9 @@ class QAOA:
         """Execute QAOA using PennyLane when engine backend is PennyLane."""
         results = VQAResults()
         results.optimizer_name = self.optimizer_name
+        # default.qubit is created without shots, so expectations are exact here
+        results.backend = "PennyLane default.qubit"
+        results.shots = 0
         n_qubits = self.graph_size
 
         if engine.verbose:
@@ -367,9 +370,11 @@ class QAOA:
 
             results.energy = result.value
             results.optimal_parameters = result.parameter_map
-            results.convergence = True
+            results.backend = engine.executor_name
+            results.shots = nbshots
+            record_optimizer_metadata(results, result)
             results.n_qubits = n_qubits
-            results.circuit_depth = len(qc)
+            results.circuit_depth = qc.depth()
             return results
 
         # Default: run local PennyLane QNode minimization as previous implementation.
@@ -483,16 +488,21 @@ class QAOA:
             results.n_evaluations += 1
             results.energy = float(final_energy)
             results.optimal_parameters = np.array(x, dtype=float)
-            results.convergence = True
+            # A fixed number of Adam steps is run; convergence is not tested
             results.n_qubits = n_qubits
-            results.circuit_depth = 0
             return results
 
-        res = minimize(cost, x0, method=method, options={"maxiter": self.max_iterations})
+        # Record every evaluation, as the myQLM path does
+        def tracked_cost(pvec):
+            value = cost(pvec)
+            results.intermediate_energies.append(value)
+            return value
+
+        res = minimize(tracked_cost, x0, method=method, options={"maxiter": self.max_iterations})
 
         results.energy = res.fun
         results.optimal_parameters = res.x
-        results.convergence = res.success
+        results.convergence = bool(res.success)
+        results.n_evaluations = len(results.intermediate_energies)
         results.n_qubits = n_qubits
-        results.circuit_depth = 0
         return results
