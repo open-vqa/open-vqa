@@ -13,13 +13,24 @@ A unified, easy-to-use interface for running Variational Quantum Algorithms (VQA
 
 ## Installation
 
-```bash
-# The openvqa package is included in the open_vqa workspace
-cd d:\open_vqa
+**Python version:** use Python 3.10, 3.11 or 3.12 (tested on 3.10 and 3.12).
+Python 3.13 and newer do not work yet, because myQLM publishes no builds for them.
 
-# Ensure all dependencies are installed
-pip install qiskit qiskit-algorithms qiskit-aer myqlm myqlm-interop numpy matplotlib
+```bash
+git clone https://github.com/open-vqa/open-vqa.git
+cd open-vqa
+
+# Tested versions of every library, plus OpenVQA itself (editable)
+python -m pip install -r requirements.txt
+
+# Check: prints the version and the folder it was imported from
+python -c "import openvqa; print(openvqa.__version__, openvqa.__file__)"
 ```
+
+Use the same Python for these commands as for your notebooks (select that
+interpreter as the Jupyter kernel). `requirements.txt` pins the exact tested
+versions; `python -m pip install -e ".[notebooks]"` installs OpenVQA with the
+supported version ranges instead.
 
 ## Quick Start
 
@@ -277,13 +288,26 @@ Every result reports its own `wall_time`, `n_evaluations` and `circuit_depth`.
 
 ## Troubleshooting
 
+### Installation fails on Python 3.13 or newer
+
+**Error:** `No matching distribution found for qat-core` or
+`requires a different Python`
+
+**Solution:** myQLM has no builds for Python 3.13+ yet. Install Python 3.12
+(or 3.10/3.11), create a fresh environment with it, and install again.
+
 ### Import Errors
+
+**Error:** `ModuleNotFoundError: No module named 'openvqa'`
+
+**Solution:** Install the package from the repository root with the same Python
+your notebook kernel uses: `python -m pip install -e .`
 
 **Error:** `ImportError: No module named 'qat'`
 
 **Solution:** Install myQLM
 ```bash
-pip install myqlm myqlm-interop
+python -m pip install -r requirements.txt
 ```
 
 ### Backend Not Found
@@ -319,8 +343,8 @@ See docstrings in source files:
 Run the demo notebooks:
 
 ```bash
-jupyter notebook openvqa/examples/vqe_demo.ipynb
-jupyter notebook openvqa/examples/qaoa_demo.ipynb
+jupyter notebook examples/vqe_demo.ipynb
+jupyter notebook examples/qaoa_demo.ipynb
 ```
 
 ## Contributing

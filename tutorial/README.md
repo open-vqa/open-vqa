@@ -73,10 +73,11 @@ results = engine.run(qaoa)
 
 ### Prerequisites
 
-Make sure you have OpenVQA installed:
+Install OpenVQA from the repository root (see the main README):
 ```bash
-pip install -r ../../requirements.txt
+python -m pip install -r requirements.txt
 ```
+Use Python 3.10, 3.11 or 3.12 (myQLM has no builds for 3.13+).
 
 ### Running the Tutorials
 
@@ -98,8 +99,6 @@ pip install -r ../../requirements.txt
 
 Run this in a Python environment to verify your setup:
 ```python
-import sys
-sys.path.insert(0, '../..')
 from openvqa import VQA_myQLM
 from openvqa.algorithms import VQE, QAOA
 print("✓ OpenVQA is ready!")
@@ -175,9 +174,9 @@ After completing the tutorials, try:
 
 **Issue**: Import errors
 ```
-Solution: Ensure you're in the right directory and have installed dependencies
-cd openvqa/tutorial
-pip install -r ../../requirements.txt
+Solution: Install OpenVQA with the same Python as the notebook kernel
+(from the repository root)
+python -m pip install -r requirements.txt
 ```
 
 **Issue**: Slow execution

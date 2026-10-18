@@ -22,6 +22,12 @@ Example:
     >>> print(f"Ground state energy: {results.energy:.10f}")
 """
 
+import warnings
+
+# myqlm-interop 1.9 still imports pkg_resources; its deprecation notice is not
+# actionable for OpenVQA users, so hide that one message only
+warnings.filterwarnings("ignore", message="pkg_resources is deprecated", category=UserWarning)
+
 from openvqa.engine import VQA_myQLM
 from openvqa.algorithms import VQE, QAOA
 from openvqa.options import AVAILABLE_OPTIONS

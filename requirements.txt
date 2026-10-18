@@ -1,19 +1,36 @@
+# Tested environment for OpenVQA: Python 3.10, 3.11 or 3.12 (myQLM has no
+# builds for Python 3.13+). From the repository root, install everything,
+# including OpenVQA itself, with:
+#
+#     python -m pip install -r requirements.txt
+
+# Quantum libraries
 qiskit==0.46.1
-qiskit_algorithms==0.2.0
-qiskit-aer==0.11.2
-pylatexenc
-ipykernel
-jupyterlab
-notebook
-myqlm
-symengine
-myqlm-interop[all]
-pennylane>=0.42.0
-matplotlib>=3.5.0
-numpy>=1.21.0
-scipy>=1.7.0
-networkx>=2.6.0
+myqlm==1.11.3
+myqlm-interop==1.9.6
+pennylane==0.42.3
+pennylane-lightning==0.42.0
+# myqlm-interop 1.9 imports pkg_resources, which setuptools 82 removed
+setuptools==80.9.0
+# myqlm-interop's Qiskit converter imports symengine without declaring it,
+# and Qiskit skips installing it on Windows
+symengine==0.14.1
+# myQLM requires JAX without a version limit; PennyLane 0.42 supports JAX up to 0.6.2
+jax==0.6.2
+jaxlib==0.6.2
 
+# Numerics
+numpy==1.26.4
+scipy==1.15.3
+networkx==3.4.2
 
-# conda install -c myqlm myqlm
-#  necessary on conda
+# Notebooks
+jupyterlab==4.5.0
+notebook==7.5.0
+ipykernel==7.1.0
+ipywidgets==8.1.8
+matplotlib==3.10.7
+pylatexenc==2.10
+
+# OpenVQA itself, editable: changes in this folder apply without reinstalling
+-e .

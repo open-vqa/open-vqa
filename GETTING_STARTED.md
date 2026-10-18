@@ -12,17 +12,24 @@ The framework supports:
 
 ## Installation
 
-OpenVQA is integrated into the `open_vqa` repository. Install dependencies:
+**Python version:** use Python 3.10, 3.11 or 3.12 (tested on 3.10 and 3.12).
+Python 3.13 and newer do not work yet, because myQLM publishes no builds for them.
 
 ```bash
-# Navigate to workspace
-cd d:\open_vqa
+git clone https://github.com/open-vqa/open-vqa.git
+cd open-vqa
 
-# Install required packages
-pip install qiskit qiskit-algorithms qiskit-aer
-pip install myqlm myqlm-interop
-pip install numpy matplotlib networkx
+# Tested versions of every library, plus OpenVQA itself (editable)
+python -m pip install -r requirements.txt
+
+# Check: prints the version and the folder it was imported from
+python -c "import openvqa; print(openvqa.__version__, openvqa.__file__)"
 ```
+
+Use the same Python for these commands as for your notebooks (select that
+interpreter as the Jupyter kernel). `requirements.txt` pins the exact tested
+versions; `python -m pip install -e ".[notebooks]"` installs OpenVQA with the
+supported version ranges instead.
 
 ## Basic Concepts
 
@@ -276,21 +283,18 @@ results = engine.run(qaoa)
 
 ### Q: "ModuleNotFoundError: No module named 'openvqa'"
 
-**Solution:**
+**Solution:** Install the package from the repository root, using the same
+Python interpreter as your notebook kernel:
 ```bash
-# Make sure you're in the d:\open_vqa directory
-cd d:\open_vqa
-
-# Add to path in Python
-import sys
-sys.path.insert(0, 'd:\\open_vqa')
+python -m pip install -e .
+python -c "import openvqa; print(openvqa.__file__)"
 ```
 
 ### Q: "ImportError: qat not found"
 
 **Solution:**
 ```bash
-pip install myqlm myqlm-interop
+python -m pip install -r requirements.txt
 ```
 
 ### Q: Optimization not converging
@@ -377,10 +381,10 @@ Run the included Jupyter notebooks:
 
 ```bash
 # VQE example
-jupyter notebook openvqa/examples/vqe_demo.ipynb
+jupyter notebook examples/vqe_demo.ipynb
 
 # QAOA example
-jupyter notebook openvqa/examples/qaoa_demo.ipynb
+jupyter notebook examples/qaoa_demo.ipynb
 ```
 
 ## Next Steps
@@ -396,7 +400,7 @@ jupyter notebook openvqa/examples/qaoa_demo.ipynb
 
 For issues or questions:
 1. Check this guide
-2. Check `openvqa/README.md`
+2. Check `README.md`
 3. See docstrings: `help(VQA_myQLM)`, `help(VQE)`
 4. Review examples in notebooks
 

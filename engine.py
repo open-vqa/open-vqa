@@ -12,8 +12,7 @@ import time
 import numpy as np
 from typing import Dict, Any, Optional, Tuple
 from qat.qpus import get_default_qpu
-from qat.plugins import ScipyMinimizePlugin, ObservableSplitter
-from qiskit_algorithms.optimizers import SLSQP, COBYLA, NELDER_MEAD
+from qat.plugins import ScipyMinimizePlugin
 
 
 class VQAResults:

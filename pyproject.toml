@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openvqa"
+dynamic = ["version"]
+description = "High-level interface for variational quantum algorithms (VQE, QAOA) on myQLM and PennyLane"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE.md"]
+# PennyLane 0.42 needs Python >= 3.10; myQLM ships builds up to Python 3.12
+requires-python = ">=3.10,<3.13"
+# Ranges cover the tested versions; the exact tested set is in requirements.txt
+dependencies = [
+    "numpy>=1.26,<2",
+    "scipy>=1.15,<2",
+    "networkx>=3.4,<4",
+    "qiskit>=0.46,<1",
+    "myqlm>=1.11,<1.12",
+    "myqlm-interop>=1.9,<1.10",
+    "pennylane>=0.42,<0.43",
+    "setuptools<82",  # myqlm-interop 1.9 imports pkg_resources, removed in setuptools 82
+    "symengine",      # imported by myqlm-interop's Qiskit converter, not declared by it
+    "jax<0.7",        # required by myQLM; PennyLane 0.42 supports JAX up to 0.6.2
+]
+
+[project.optional-dependencies]
+notebooks = ["jupyterlab", "notebook", "ipykernel", "ipywidgets", "matplotlib", "pylatexenc"]
+
+[project.urls]
+Repository = "https://github.com/open-vqa/open-vqa"
+
+# The repository root is the `openvqa` package itself
+[tool.setuptools]
+package-dir = {"openvqa" = "."}
+packages = [
+    "openvqa",
+    "openvqa.algorithms",
+    "openvqa.interop",
+    "openvqa.mathematical_tools",
+]
+
+[tool.setuptools.dynamic]
+version = {attr = "openvqa.__version__"}
