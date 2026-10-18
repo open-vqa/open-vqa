@@ -132,7 +132,7 @@ qaoa_adam = QAOA(
 
 # Run optimization
 results = engine.run(qaoa_cobyla)
-print(f"MaxCut Value: {results.energy:.6f}")
+print(f"Expected cut value: {-results.energy:.6f}")  # energy = -cut
 ```
 
 ## Interactive Notebook Features

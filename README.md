@@ -91,7 +91,7 @@ results = engine.run(algorithm)
 
 # Display results
 print(results)
-print(f"MaxCut approximation: {results.energy:.6f}")
+print(f"Expected cut value: {-results.energy:.6f}")  # energy = -cut
 ```
 
 ## Architecture

@@ -46,7 +46,13 @@ class QAOA:
         ...     feature_map="PauliFeatureMap"
         ... )
         >>> results = engine.run(algorithm)
-        >>> print(f"Max Cut Value: {results.energy:.4f}")
+        >>> print(f"Expected cut: {-results.energy:.4f}")
+        
+    MaxCut convention:
+        The minimised observable is H = -C, where C is the cut value, so
+        ``results.energy`` is minus the expected cut. Assign ``algorithm.graph``
+        (nodes labelled 0..graph_size-1) before running to use a fixed graph;
+        otherwise a random weighted complete graph is generated.
         
     Supported Optimizers:
         - "cobyla": Constrained Optimization BY Linear Approximation (default)
@@ -147,16 +153,13 @@ class QAOA:
             beta = params[param_idx + 1]
             param_idx += 2
             
-            # Problem Hamiltonian: ZZ interactions on edges
+            # Problem Hamiltonian: exp(-i*gamma*w/2*Z_u*Z_v) on each edge
+            # (the constant term of H only adds a global phase)
             for u, v in graph.edges():
-                angle = 2 * gamma * graph[u][v].get('weight', 1.0)
+                angle = gamma * graph[u][v].get('weight', 1.0)
                 qc.cx(u, v)
                 qc.rz(angle, v)
                 qc.cx(u, v)
-            
-            # Single qubit Z
-            for q in range(n_qubits):
-                qc.rz(gamma, q)
             
             # Mixer Hamiltonian: X rotations (RX)
             for q in range(n_qubits):
@@ -165,17 +168,18 @@ class QAOA:
         return qc, params
     
     def _build_maxcut_observable(self, graph: nx.Graph) -> Observable:
-        """Build MaxCut objective as observable (negative for minimization)."""
+        """Build MaxCut objective as observable H = -C, so energy = -(cut value)."""
         terms = []
+        constant = 0.0
         
         for u, v in graph.edges():
             weight = graph[u][v].get('weight', 1.0)
-            # MaxCut objective: -0.5 * sum_{edges} (1 - Z_u*Z_v)
-            # Which equals: 0.5 * sum (Z_u*Z_v) - constant
-            term = Term(-weight / 2, ["Z", "Z"], [u, v])
-            terms.append(term)
+            # Cut value: C = sum_{edges} w/2 * (1 - Z_u*Z_v)
+            # Minimise:  H = -C = sum_{edges} w/2 * Z_u*Z_v - sum_{edges} w/2
+            terms.append(Term(weight / 2, ["Z", "Z"], [u, v]))
+            constant -= weight / 2
         
-        return Observable(len(graph.nodes()), pauli_terms=terms, constant_coeff=0.0)
+        return Observable(len(graph.nodes()), pauli_terms=terms, constant_coeff=constant)
     
     def build_feature_map(self, name: str, n_qubits: int):
         """Build a Qiskit feature map."""
@@ -241,11 +245,27 @@ class QAOA:
         
         return qc, params
     
+    def _get_graph(self) -> nx.Graph:
+        """Return the problem graph, generating a random one only if none was assigned."""
+        if self.graph is None:
+            self.graph = self._create_maxcut_graph(self.graph_size)
+        
+        nodes = sorted(self.graph.nodes())
+        if nodes != list(range(len(nodes))):
+            raise ValueError(
+                f"Graph nodes must be labelled 0..{len(nodes) - 1} to match qubit indices, "
+                f"got {nodes}. Relabel with nx.convert_node_labels_to_integers(graph)."
+            )
+        if len(nodes) != self.graph_size:
+            raise ValueError(
+                f"Graph has {len(nodes)} nodes but graph_size={self.graph_size}."
+            )
+        return self.graph
+    
     def build_circuit(self) -> tuple:
         """Build QAOA circuit for the specified problem."""
         if self.problem.lower() == "maxcut":
-            self.graph = self._create_maxcut_graph(self.graph_size)
-            qc, params = self._build_maxcut_circuit(self.graph, self.p)
+            qc, params = self._build_maxcut_circuit(self._get_graph(), self.p)
             self.n_params = len(params)
             return qc, params
         else:
@@ -254,9 +274,7 @@ class QAOA:
     def build_observable(self) -> Observable:
         """Build objective function as Observable."""
         if self.problem.lower() == "maxcut":
-            if self.graph is None:
-                self.graph = self._create_maxcut_graph(self.graph_size)
-            return self._build_maxcut_observable(self.graph)
+            return self._build_maxcut_observable(self._get_graph())
         else:
             raise ValueError(f"Unsupported problem: {self.problem}")
     
@@ -326,8 +344,7 @@ class QAOA:
             print(f"Building QAOA circuit for {self.problem} (PennyLane)...")
 
         # build graph and Hamiltonian (MaxCut)
-        if self.graph is None:
-            self.graph = self._create_maxcut_graph(self.graph_size)
+        self._get_graph()
 
         # If engine requests running PennyLane templates via QLM conversion,
         # and an ansatz template name was provided, convert it to Qiskit and
@@ -355,13 +372,18 @@ class QAOA:
 
         # Default: run local PennyLane QNode minimization as previous implementation
         # build pennylane Hamiltonian
+        # Same convention as _build_maxcut_observable: H = -C
         coeffs = []
         ops = []
+        constant = 0.0
         import pennylane as qml
         for u, v in self.graph.edges():
             weight = self.graph[u][v].get('weight', 1.0)
-            coeffs.append(-weight / 2)
+            coeffs.append(weight / 2)
             ops.append(qml.PauliZ(wires=u) @ qml.PauliZ(wires=v))
+            constant -= weight / 2
+        coeffs.append(constant)
+        ops.append(qml.Identity(wires=0))
         hamiltonian_pl = qml.Hamiltonian(coeffs, ops)
 
         # build qaoa ansatz function
@@ -376,7 +398,7 @@ class QAOA:
                 idx += 2
                 for u, v in self.graph.edges():
                     qml.CNOT(wires=[u, v])
-                    qml.RZ(2 * gamma * self.graph[u][v].get('weight',1.0), wires=v)
+                    qml.RZ(gamma * self.graph[u][v].get('weight',1.0), wires=v)
                     qml.CNOT(wires=[u, v])
                 for q in range(n_qubits):
                     qml.RX(2 * beta, wires=q)

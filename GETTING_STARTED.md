@@ -120,7 +120,7 @@ qaoa = QAOA(problem="maxcut", graph_size=5, optimizer="cobyla", p=2)
 results = engine.run(qaoa)
 
 # Results
-print(f"MaxCut value: {results.energy:.4f}")
+print(f"Expected cut value: {-results.energy:.4f}")  # energy = -cut
 print(f"Optimal params: {results.optimal_parameters}")
 ```
 
@@ -246,7 +246,7 @@ engine = VQA_myQLM(n_qubits=4)
 qaoa = QAOA(problem="maxcut", graph_size=4, p=1)
 results = engine.run(qaoa)
 
-# results.energy ≈ optimal/approximate cut value
+# -results.energy = expected cut value (energy is minimised, H = -C)
 ```
 
 ### QAOA Depth (p)
