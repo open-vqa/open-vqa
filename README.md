@@ -32,6 +32,9 @@ interpreter as the Jupyter kernel). `requirements.txt` pins the exact tested
 versions; `python -m pip install -e ".[notebooks]"` installs OpenVQA with the
 supported version ranges instead.
 
+For a step-by-step guide (conda or venv) with checks that the installation works,
+see [tutorial/setup_environment.ipynb](tutorial/setup_environment.ipynb).
+
 ## Quick Start
 
 ### Example 1: VQE on the H2-labelled model

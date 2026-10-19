@@ -15,6 +15,9 @@ jupyter lab
 
 In Jupyter, use the kernel of the same Python you installed with.
 
+Step-by-step guide, with conda and venv options and checks that everything works:
+[setup_environment.ipynb](setup_environment.ipynb).
+
 ## Tutorials: start here
 
 | Notebook | What you do | Answer to compare with |
