@@ -36,7 +36,9 @@ class VQE:
         optimizer (str): Classical optimizer - "cobyla", "nelder-mead", "bfgs", or "adam" (default: "cobyla")
         max_iterations (int): Maximum optimization iterations (default: 100)
         n_layers (int): Number of ansatz layers (default: 2)
-        optimizer_options (dict): Additional optimizer-specific options (e.g., learning_rate for adam)
+        optimizer_options (dict): Additional optimizer-specific options (e.g., learning_rate for adam).
+            On the PennyLane path also initial_point (one angle per parameter) or
+            init_scale (spread of the random starting angles, default 0.1)
     
     Example:
         >>> algorithm = VQE(
@@ -502,6 +504,21 @@ class VQE:
         def cost(p):
             return float(circuit(p))
 
+        # All-zero angles can be a stationary point (the PennyLane templates then
+        # prepare |0...0>, where every gradient of the H2 model vanishes), so
+        # gradient-based optimizers (Adam, BFGS) cannot move. Start from small random
+        # angles unless the caller provides an initial point, as QAOA does; np.random
+        # is seeded by the engine.
+        init_scale = float(self.optimizer_options.get("init_scale", 0.1))
+        initial_point = self.optimizer_options.get("initial_point", None)
+        if initial_point is None:
+            x0 = init_scale * np.random.normal(size=n_params)
+        else:
+            x0 = np.array(initial_point, dtype=float)
+            if x0.shape != (n_params,):
+                raise ValueError(
+                    f"initial_point must have shape ({n_params},), got {x0.shape}"
+                )
         method = self.optimizer_name.lower()
 
         if method == "adam":
@@ -528,7 +545,7 @@ class VQE:
                     grad[i] = (cost(x_fwd) - cost(x_bwd)) / (2.0 * finite_diff_eps)
                 return grad
 
-            x = np.zeros(n_params, dtype=float)
+            x = np.array(x0, dtype=float, copy=True)
             results.intermediate_energies = []
             results.n_evaluations = 0
 
@@ -556,7 +573,6 @@ class VQE:
             results.intermediate_energies.append(value)
             return value
 
-        x0 = np.zeros(n_params)
         res = minimize(
             tracked_cost,
             x0,

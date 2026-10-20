@@ -34,7 +34,9 @@ class QAOA:
         ansatz (str): Ansatz circuit type (e.g., "StronglyEntanglingLayers", "RealAmplitudes")
         embedding (str): Embedding type for encoding data (e.g., "AngleEmbedding") - for PennyLane backends
         feature_map (str): Feature map for encoding data (e.g., "PauliFeatureMap") - for Qiskit backends
-        optimizer_options (dict): Additional optimizer-specific options (e.g., learning_rate for adam)
+        optimizer_options (dict): Additional optimizer-specific options (e.g., learning_rate for adam).
+            On the PennyLane path also initial_point (one angle per parameter) or
+            init_scale (spread of the random starting angles, default 0.1)
     
     Example:
         >>> algorithm = QAOA(
@@ -428,7 +430,20 @@ class QAOA:
         def cost(pvec):
             return float(circuit(pvec))
 
-        x0 = np.zeros(n_params)
+        # QAOA's cost has a stationary point at all-zero angles (phases don't affect
+        # a diagonal observable without a mixer effect), where gradient-based
+        # optimizers (Adam, BFGS) cannot move. Start from small random angles unless
+        # the caller provides an initial point; np.random is seeded by the engine.
+        init_scale = float(self.optimizer_options.get("init_scale", 0.1))
+        initial_point = self.optimizer_options.get("initial_point", None)
+        if initial_point is None:
+            x0 = init_scale * np.random.normal(size=n_params)
+        else:
+            x0 = np.array(initial_point, dtype=float)
+            if x0.shape != (n_params,):
+                raise ValueError(
+                    f"initial_point must have shape ({n_params},), got {x0.shape}"
+                )
         method = self.optimizer_name.lower()
 
         if method == "adam":
@@ -437,22 +452,6 @@ class QAOA:
             beta2 = float(self.optimizer_options.get("beta2", 0.999))
             epsilon = float(self.optimizer_options.get("epsilon", 1e-8))
             finite_diff_eps = float(self.optimizer_options.get("finite_diff_eps", 1e-6))
-            init_scale = float(self.optimizer_options.get("init_scale", 0.1))
-
-            # Important: QAOA's cost can have a stationary point at all-zeros
-            # (phases don't affect diagonal observables without a mixer effect).
-            # If we start at exactly zero, finite-difference gradients can be ~0
-            # and Adam may not move. Use a non-zero initialization unless the
-            # caller provided an explicit initial point.
-            initial_point = self.optimizer_options.get("initial_point", None)
-            if initial_point is None:
-                x0 = init_scale * np.random.normal(size=n_params)
-            else:
-                x0 = np.array(initial_point, dtype=float)
-                if x0.shape != (n_params,):
-                    raise ValueError(
-                        f"initial_point must have shape ({n_params},), got {x0.shape}"
-                    )
 
             optimizer = AdamOptimizer(
                 learning_rate=learning_rate,
